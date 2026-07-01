@@ -98,6 +98,7 @@ class FiveHundredRules(
             seat = seat,
             phase = state.phase,
             hand = state.hands[seat].orEmpty(),
+            handSizes = state.hands.mapValues { it.value.size },
             dealer = state.dealer,
             scores = state.scores,
             toAct = toAct,

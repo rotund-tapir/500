@@ -28,6 +28,4 @@ includeBuild("cardkit")
 
 include(":engine")
 include(":ai")
-
-// Further modules are added by their respective commits:
-//   include(":app")
+include(":app")

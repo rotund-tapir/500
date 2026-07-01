@@ -74,6 +74,7 @@ data class PlayerView(
     val seat: Seat,
     val phase: Phase,
     val hand: List<Card>,
+    val handSizes: Map<Seat, Int>,
     val dealer: Seat,
     val scores: Map<Int, Int>,
     val toAct: Seat?,
