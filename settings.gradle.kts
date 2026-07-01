@@ -26,7 +26,8 @@ rootProject.name = "five-hundred"
 // "io.github.rotundtapir.cardkit:<module>" dependencies with these local projects.
 includeBuild("cardkit")
 
-// App modules are added by their respective commits:
-//   include(":engine")
+include(":engine")
+
+// Further modules are added by their respective commits:
 //   include(":ai")
 //   include(":app")
