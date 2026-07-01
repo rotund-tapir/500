@@ -58,3 +58,15 @@ Add a SPDX header to new source files:
 ```
 
 Requires JDK 21 and the Android SDK (`compileSdk 35`).
+
+## Git hooks
+
+A pre-commit hook runs `./gradlew lint test` so CI lint/test failures are caught
+locally. Enable it once per clone:
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+It skips doc-only commits and selects a JDK 21 automatically. Bypass in a pinch
+with `git commit --no-verify`.

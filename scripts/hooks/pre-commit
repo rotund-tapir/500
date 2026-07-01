@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run Gradle lint + unit tests so CI lint/test failures are
+# caught locally before pushing. Bypass in a pinch with:  git commit --no-verify
+#
+# Enabled via `git config core.hooksPath scripts/hooks` (see CONTRIBUTING.md).
+set -eo pipefail
+
+# Skip doc-only commits — only run when code or build files are staged.
+if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '\.(kt|kts|java|xml)$|gradle'; then
+    exit 0
+fi
+
+# The Android Gradle Plugin does not run on JDK 25+, so ensure a JDK 21 is used.
+if [ -z "${JAVA_HOME:-}" ] || ! "${JAVA_HOME}/bin/java" -version 2>&1 | grep -q 'version "21'; then
+    for candidate in \
+        /usr/lib/jvm/java-21-openjdk-amd64 \
+        /usr/lib/jvm/temurin-21-jdk* \
+        "${HOME}/.sdkman/candidates/java/21"* ; do
+        if [ -x "${candidate}/bin/java" ]; then
+            export JAVA_HOME="${candidate}"
+            break
+        fi
+    done
+fi
+
+echo "[pre-commit] ./gradlew lint test   (JAVA_HOME=${JAVA_HOME:-<default>})"
+if ! ./gradlew --console=plain --quiet lint test; then
+    echo >&2
+    echo "[pre-commit] Gradle lint/test failed — fix the issues above, or bypass with 'git commit --no-verify'." >&2
+    exit 1
+fi
