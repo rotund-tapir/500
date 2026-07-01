@@ -168,6 +168,83 @@ class GameFlowTest {
         rule.onNodeWithText("New Game").assertIsDisplayed()
     }
 
+    @Test
+    fun menuThenNewGame_dealsAFreshHand() {
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithText("Menu").performClick()
+        rule.onNodeWithText("New Game").performClick()
+        waitForBidPanel()
+        assertEquals("fresh hand after restarting from the menu", 10, cardsOnScreen())
+        rule.onNodeWithText("Us: 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun inProgressGame_survivesActivityRecreation() {
+        startGame()
+        waitForBidPanel()
+
+        // Simulates rotation / theme change / process-driven recreation: the game runs in the
+        // ViewModel and the in-game flag is saveable, so the table must still be showing.
+        rule.activityRule.scenario.recreate()
+
+        rule.waitUntil(STEP_TIMEOUT_MS) { textExists("Menu") }
+        assertTrue("game screen should survive recreation", textExists("Your bid:"))
+        assertEquals(10, cardsOnScreen())
+    }
+
+    @Test
+    fun discardSelection_isCappedAtKittySize() {
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithTag("bid:Open Misère").performScrollTo().performClick()
+        waitForText("Discard 3 cards", substring = true)
+
+        // Try to select four cards: the selection must stop at three.
+        repeat(4) { i ->
+            clickableCards()[i].performScrollTo().performClick()
+            rule.waitForIdle()
+        }
+        waitForText("(3/3 selected)", substring = true)
+        rule.onNodeWithTag("discardButton").assertIsEnabled()
+    }
+
+    @Test
+    fun whenItIsYourTurn_someCardsArePlayable_neverMoreThanHandSize() {
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithTag("bid:Pass").performClick()
+
+        // Play through the human's first few turns of the hand, checking the legality invariant
+        // each time: at least one card must be playable, never more than are held.
+        var checks = 0
+        val deadline = System.currentTimeMillis() + 60_000
+        while (checks < 3 && System.currentTimeMillis() < deadline) {
+            rule.waitUntil(STEP_TIMEOUT_MS) {
+                textExists("Your turn — tap a card to play") ||
+                    textExists("Your bid:") ||
+                    textExists("(last:", substring = true) ||
+                    textExists("You win!") || textExists("You lose")
+            }
+            when {
+                textExists("Your turn — tap a card to play") -> {
+                    val playable = clickableCards().fetchSemanticsNodes().size
+                    assertTrue("at least one legal play", playable >= 1)
+                    assertTrue("no more legal plays than cards held", playable <= 10)
+                    checks++
+                    clickableCards()[0].performScrollTo().performClick()
+                    rule.waitForIdle()
+                }
+                textExists("Your bid:") -> {
+                    rule.onNodeWithTag("bid:Pass").performScrollTo().performClick()
+                    rule.waitForIdle()
+                }
+                else -> return // hand ended early — invariant held for every turn we saw
+            }
+        }
+        assertTrue("expected to reach at least one play turn", checks >= 1)
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Generic hand driver
     // ---------------------------------------------------------------------------------------------

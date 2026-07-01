@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rotundtapir.cardkit.monetization.Monetization
@@ -48,7 +48,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun FiveHundredApp(monetization: Monetization, activity: Activity, nextSeed: () -> Long) {
     val vm: GameViewModel = viewModel()
-    var inGame by remember { mutableStateOf(false) }
+    // Saveable so an in-progress game survives activity recreation (rotation, theme change, …);
+    // the game itself lives in the ViewModel.
+    var inGame by rememberSaveable { mutableStateOf(false) }
     val view by vm.humanView.collectAsState()
 
     if (!inGame) {

@@ -11,14 +11,15 @@ game-agnostic infrastructure lives in `cardkit`.
 
 ## Toolchain (read first — non-obvious and will waste time otherwise)
 
-- **Gradle must run on JDK 21.** The machine default `java` is JDK 25, and the Android Gradle Plugin
-  fails on JDK 25+. Every Gradle invocation must set:
+- **Gradle must run on JDK 21** (the machine default `java` is JDK 25, and the Android Gradle Plugin
+  fails on JDK 25+). `gradle/gradle-daemon-jvm.properties` pins the daemon to a version-21 toolchain
+  (vendor-agnostic — do NOT let Android Studio regenerate it with `toolchainVendor=JETBRAINS`; that
+  breaks CI, which has Temurin). So `JAVA_HOME` is no longer required for `./gradlew`, but every
+  invocation still needs:
   ```bash
-  export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
   export ANDROID_HOME="$HOME/Android/Sdk"
   ```
-  Kotlin/JVM modules pin `jvmToolchain(21)` and Android modules pin `jvmTarget = 17`, but the **daemon
-  JVM** still comes from `JAVA_HOME`, hence the requirement.
+  Kotlin/JVM modules pin `jvmToolchain(21)`; Android modules pin `jvmTarget = 17`.
 - `gradle` is not on PATH; use the committed wrapper `./gradlew` (or `source ~/.sdkman/bin/sdkman-init.sh`).
 - The Android SDK here has only `platforms;android-35` + `build-tools;35.0.0`.
 
