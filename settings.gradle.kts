@@ -27,7 +27,7 @@ rootProject.name = "five-hundred"
 includeBuild("cardkit")
 
 include(":engine")
+include(":ai")
 
 // Further modules are added by their respective commits:
-//   include(":ai")
 //   include(":app")
