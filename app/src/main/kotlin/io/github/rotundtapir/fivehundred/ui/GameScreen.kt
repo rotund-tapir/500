@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -130,6 +131,7 @@ fun GameScreen(
     tutorial: TutorialScriptState? = null,
     onResultDismissed: (Int) -> Unit = {},
     onDealAnimationFinished: (Int) -> Unit = {},
+    onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
 ) {
     var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
     // Set once the tutorial's scripted hand has been scored and its result dialog dismissed.
@@ -190,6 +192,7 @@ fun GameScreen(
                     modifier = Modifier
                         .weight(1f)
                         .tutorialTarget(tutorialTargets, "trick"),
+                    onTrickAcknowledged = onTrickAcknowledged,
                 )
                 if (dealState.dealing) {
                     DealingHandRow(
@@ -286,6 +289,10 @@ fun GameScreen(
 /** Records this composable's window bounds under [key] for the tutorial bubble to anchor to. */
 private fun Modifier.tutorialTarget(map: MutableMap<String, Rect>?, key: String): Modifier =
     if (map == null) this else onGloballyPositioned { map[key] = it.boundsInRoot() }
+
+/** Clickable only while [enabled] — written as a factory to avoid conditional `.then` chains. */
+private fun Modifier.tappableWhen(enabled: Boolean, onTap: () -> Unit): Modifier =
+    if (enabled) this.clickable(onClick = onTap) else this
 
 /**
  * The tutorial guidance as a speech bubble anchored to whatever needs interacting with next: it
@@ -689,6 +696,10 @@ private fun OpponentStatus(
         val cardCount = if (dealState.dealing) dealState.dealtTo(seat) else view.handSizes[seat] ?: 0
         Text("cards: $cardCount", style = textStyle)
         Text("tricks: ${view.tricksWon[seat] ?: 0}", style = textStyle)
+        // Auction actions stay visible through the kitty exchange: knowing who bid what (and in
+        // which suit) informs which side suits the declarer should shorten. During the exchange
+        // the LAST REAL BID matters, not the pass that ended the auction — someone who bid 6♥ and
+        // then passed still told you where their strength is.
         if (view.phase == Phase.BIDDING) {
             val lastAction = view.biddingHistory.lastOrNull { it.first == seat }?.second
             Text(
@@ -697,6 +708,13 @@ private fun OpponentStatus(
                     lastAction == Bid.Pass -> "passed"
                     else -> "bid ${lastAction.label}"
                 },
+                style = textStyle,
+            )
+        } else if (view.phase == Phase.KITTY) {
+            val lastRealBid = view.biddingHistory
+                .lastOrNull { it.first == seat && it.second != Bid.Pass }?.second
+            Text(
+                if (lastRealBid != null) "bid ${lastRealBid.label}" else "no bid",
                 style = textStyle,
             )
         }
@@ -739,13 +757,23 @@ private fun TrickArea(
     animationSpeed: AnimationSpeed,
     dealState: DealAnimationState,
     modifier: Modifier = Modifier,
+    onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
 ) {
+    // A completed trick stays on the felt until the player taps it away (unless a play by the
+    // human is what's pending, or animations are OFF) — time to memorise the cards for counting.
+    val holdingTrick = animationSpeed != AnimationSpeed.OFF &&
+        !dealState.dealing &&
+        view.phase == Phase.PLAY &&
+        view.currentTrick.isEmpty() &&
+        view.lastTrick != null &&
+        !view.isMyTurn
     // The "felt" — a slightly darker rounded table centre where the current trick lands.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp)
-            .background(Color(0x22000000), RoundedCornerShape(16.dp)),
+            .background(Color(0x22000000), RoundedCornerShape(16.dp))
+            .tappableWhen(holdingTrick) { onTrickAcknowledged(view.handNumber, view.trickNumber) },
         contentAlignment = Alignment.Center,
     ) {
         if (dealState.dealing) {
@@ -769,6 +797,14 @@ private fun TrickArea(
                         TrickPlaysRow(v, botNames, lastTrick.plays)
                         Spacer(Modifier.height(4.dp))
                         Text("${seatLabel(v, botNames, lastTrick.winner)} won the trick")
+                        if (holdingTrick) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "tap to continue",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                            )
+                        }
                     }
                     else -> Text(
                         when {
@@ -794,14 +830,32 @@ private fun TrickArea(
 
 @Composable
 private fun TrickPlaysRow(view: PlayerView, botNames: Map<Seat, String>, plays: List<TrickPlay>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        plays.forEach { play ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                PlayingCard(play.card, width = 56.dp)
-                Spacer(Modifier.height(4.dp))
-                Text(seatLabel(view, botNames, play.seat))
+    // Six-player tricks don't fit in one row on a phone — split into two rows (3+3, or 3+2)
+    // so the cards stay full size.
+    if (plays.size <= 4) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            plays.forEach { play -> TrickPlayCell(view, botNames, play) }
+        }
+    } else {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            plays.chunked((plays.size + 1) / 2).forEach { rowPlays ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowPlays.forEach { play -> TrickPlayCell(view, botNames, play) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TrickPlayCell(view: PlayerView, botNames: Map<Seat, String>, play: TrickPlay) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        PlayingCard(play.card, width = 56.dp)
+        Spacer(Modifier.height(4.dp))
+        Text(seatLabel(view, botNames, play.seat), maxLines = 1)
     }
 }
 

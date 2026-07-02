@@ -64,6 +64,19 @@ class GameViewModel : ViewModel() {
         dealAnimationDone.value = maxOf(dealAnimationDone.value, handNumber)
     }
 
+    /** Key of the last completed trick the player has acknowledged (tapped past). */
+    private val trickAcked = MutableStateFlow(0)
+
+    private fun trickKey(handNumber: Int, trickNumber: Int) = handNumber * 1000 + trickNumber
+
+    /**
+     * Called by the UI when the player taps the completed trick away; releases the next leader.
+     * The completed trick stays on the felt until then so it can be memorised for counting.
+     */
+    fun acknowledgeTrick(handNumber: Int, trickNumber: Int) {
+        trickAcked.value = maxOf(trickAcked.value, trickKey(handNumber, trickNumber))
+    }
+
     private val _botNames = MutableStateFlow<Map<Seat, String>>(emptyMap())
 
     /** Display names for the bot seats (1 until playerCount), fixed per game. */
@@ -87,6 +100,7 @@ class GameViewModel : ViewModel() {
         state.value = null
         handResultAcked.value = 0
         dealAnimationDone.value = 0
+        trickAcked.value = 0
         rules = FiveHundredRules(
             playerCount = playerCount,
             misereEnabled = misereEnabled,
@@ -124,22 +138,17 @@ class GameViewModel : ViewModel() {
                     delay(animationSpeed.value.botDelayMillis)
                 }
             }
-            // A bot about to lead a fresh trick (not the hand's first) pauses longer first, so the
-            // just-completed trick — and the winner popup — can be read before play moves on.
-            if (view.currentTrick.isEmpty() && view.trickNumber > 0) {
-                delay(interTrickPauseMillis(animationSpeed.value))
+            // A bot about to lead a fresh trick (not the hand's first) waits until the player taps
+            // the completed trick away — it stays on the felt indefinitely so it can be memorised
+            // for card counting. Skipped at OFF (no pacing), where play flows uninterrupted.
+            if (view.currentTrick.isEmpty() && view.trickNumber > 0 &&
+                animationSpeed.value != AnimationSpeed.OFF
+            ) {
+                trickAcked.first { it >= trickKey(view.handNumber, view.trickNumber) }
             }
             delay(animationSpeed.value.botDelayMillis)
             inner.decide(view)
         }
-
-    /** Extra pause before a bot leads the next trick, leaving the previous one readable. */
-    private fun interTrickPauseMillis(speed: AnimationSpeed): Long = when (speed) {
-        AnimationSpeed.SLOW -> 1800L
-        AnimationSpeed.NORMAL -> 1000L
-        AnimationSpeed.FAST -> 400L
-        AnimationSpeed.OFF -> 0L
-    }
 
     /** Hold before the first bid of a hand — covers GameScreen's shuffle + deal animation. */
     private fun dealPauseMillis(speed: AnimationSpeed): Long = when (speed) {

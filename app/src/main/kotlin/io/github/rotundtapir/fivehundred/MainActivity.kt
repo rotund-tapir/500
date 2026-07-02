@@ -177,6 +177,7 @@ private fun FiveHundredApp(
                 } else null,
                 onResultDismissed = vm::acknowledgeHandResult,
                 onDealAnimationFinished = vm::dealAnimationFinished,
+                onTrickAcknowledged = vm::acknowledgeTrick,
             )
         }
     }
