@@ -105,6 +105,33 @@ class GameFlowTest {
     }
 
     @Test
+    fun walkthrough_opensNavigatesAndCloses() {
+        rule.onNodeWithTag("walkthroughButton").performClick()
+        waitForText("Welcome to 500")
+        // Page through to the end and finish.
+        repeat(10) {
+            if (!textExists("Done")) {
+                rule.onNodeWithTag("walkthroughNext").performClick()
+                rule.waitForIdle()
+            }
+        }
+        rule.onNodeWithTag("walkthroughDone").performClick()
+        rule.onNodeWithText("New Game").assertIsDisplayed()
+    }
+
+    @Test
+    fun helpRules_openFromSettings_andDocumentTheBowers() {
+        rule.onNodeWithTag("settingsButton").performClick()
+        rule.onNodeWithTag("helpButton").performClick()
+        waitForText("Rules of 500")
+        assertTrue(textExists("bower", substring = true))
+        assertTrue("scoring table must show the 10NT value", textExists("520", substring = true))
+        rule.onNodeWithTag("rulesClose").performClick()
+        rule.onNodeWithText("Done").performClick()
+        rule.onNodeWithText("New Game").assertIsDisplayed()
+    }
+
+    @Test
     fun settingsDialog_hasSupportAndAcknowledgments() {
         rule.onNodeWithTag("settingsButton").performClick()
         // FOSS flavor: a donation link, never an ads purchase.

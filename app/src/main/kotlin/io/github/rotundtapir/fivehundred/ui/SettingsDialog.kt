@@ -49,6 +49,11 @@ fun SettingsDialog(
         AcknowledgmentsDialog(onDismiss = { showAcknowledgments = false })
         return
     }
+    var showRules by remember { mutableStateOf(false) }
+    if (showRules) {
+        RulesDialog(onDismiss = { showRules = false })
+        return
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -122,6 +127,10 @@ fun SettingsDialog(
                         }
                     )
                 }
+                OutlinedButton(
+                    onClick = { showRules = true },
+                    modifier = Modifier.fillMaxWidth().testTag("helpButton"),
+                ) { Text("Help — rules of 500") }
                 OutlinedButton(
                     onClick = { showAcknowledgments = true },
                     modifier = Modifier.fillMaxWidth().testTag("acknowledgments"),

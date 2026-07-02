@@ -55,6 +55,7 @@ fun HomeScreen(
     onPlayerCountChange: (Int) -> Unit,
 ) {
     var showSettings by remember { mutableStateOf(false) }
+    var showWalkthrough by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -109,6 +110,14 @@ fun HomeScreen(
                         contentColor = MaterialTheme.colorScheme.primary,
                     ),
                 ) { Text("New Game", fontWeight = FontWeight.Bold) }
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = { showWalkthrough = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
+                    modifier = Modifier.testTag("walkthroughButton"),
+                ) { Text("How to play") }
 
                 Spacer(Modifier.height(24.dp))
                 monetization.BannerSlot(Modifier.fillMaxWidth())
@@ -116,6 +125,9 @@ fun HomeScreen(
         }
     }
 
+    if (showWalkthrough) {
+        WalkthroughDialog(onDismiss = { showWalkthrough = false })
+    }
     if (showSettings) {
         SettingsDialog(
             animationSpeed = animationSpeed,
