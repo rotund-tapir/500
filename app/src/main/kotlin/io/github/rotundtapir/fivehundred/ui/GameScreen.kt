@@ -4,7 +4,6 @@ package io.github.rotundtapir.fivehundred.ui
 import android.app.Activity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -43,16 +42,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import io.github.rotundtapir.cardkit.core.Card
 import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.core.Suit
 import io.github.rotundtapir.cardkit.monetization.Monetization
-import io.github.rotundtapir.cardkit.ui.CardBack
 import io.github.rotundtapir.cardkit.ui.CardHand
 import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.fivehundred.AnimationSpeed
@@ -99,30 +98,18 @@ fun GameScreen(
 ) {
     var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
 
-    // Dealing animation: on each new hand (unless animations are OFF) step through 500's 3-4-3 deal.
-    // dealRound counts completed rounds (0..3 → 0/3/7/10 cards per seat, 0..3 kitty cards); while
-    // `dealing` the ActionArea is hidden so the player can't bid mid-deal. Tests run at OFF, where
-    // this is skipped entirely. lastAnimatedHand is saveable so recreation doesn't replay the deal.
-    var dealing by remember { mutableStateOf(false) }
-    var dealRound by remember { mutableStateOf(0) }
+    // Dealing animation: on each new hand (unless animations are OFF) fly card backs one at a time
+    // from a centre deck to each seat's pile / the kitty in 500's 3-4-3 packet order, then flip the
+    // human's face-down row face up. While it runs the ActionArea is hidden so the player can't bid
+    // mid-deal. Tests run at OFF, where this is skipped entirely (dealState.stage stays DONE).
+    // lastAnimatedHand is saveable so recreation doesn't replay the deal.
+    val dealState = remember { DealAnimationState() }
     var lastAnimatedHand by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(view.handNumber) {
         if (animationSpeed == AnimationSpeed.OFF) return@LaunchedEffect
         if (view.handNumber == lastAnimatedHand) return@LaunchedEffect
         lastAnimatedHand = view.handNumber
-        val stepMillis = when (animationSpeed) {
-            AnimationSpeed.SLOW -> 1000L
-            AnimationSpeed.FAST -> 300L
-            else -> 625L
-        }
-        dealRound = 0
-        dealing = true
-        repeat(3) { round ->
-            delay(stepMillis)
-            dealRound = round + 1
-        }
-        delay(stepMillis)
-        dealing = false
+        runDealAnimation(dealState, view.playerCount, view.dealer, animationSpeed)
     }
 
     Surface(
@@ -130,37 +117,52 @@ fun GameScreen(
         color = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = 12.dp),
+                .onGloballyPositioned { dealState.overlayOrigin = it.positionInRoot() },
         ) {
-            ScoreBar(view, onExit)
-            ContractLine(view, botNames)
-            Spacer(Modifier.height(12.dp))
-            OpponentsRow(view, botNames)
-            ExposedDeclarerHand(view, botNames)
-            TrickArea(
-                view = view,
-                botNames = botNames,
-                animationSpeed = animationSpeed,
-                dealRound = if (dealing) dealRound else null,
-                modifier = Modifier.weight(1f),
-            )
-            if (!dealing) {
-                ActionArea(
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .safeDrawingPadding()
+                    .padding(horizontal = 12.dp),
+            ) {
+                ScoreBar(view, onExit)
+                ContractLine(view, botNames)
+                Spacer(Modifier.height(12.dp))
+                OpponentsRow(view, botNames, dealState)
+                ExposedDeclarerHand(view, botNames)
+                TrickArea(
                     view = view,
                     botNames = botNames,
-                    sortHand = sortHand,
-                    onToggleSort = { sortHand = !sortHand },
-                    onBid = onBid,
-                    onDiscard = onDiscard,
-                    onPlay = onPlay,
+                    animationSpeed = animationSpeed,
+                    dealState = dealState,
+                    modifier = Modifier.weight(1f),
                 )
+                if (dealState.dealing) {
+                    DealingHandRow(
+                        cards = if (sortHand) sortedForDisplay(view.hand, view.trump) else view.hand,
+                        state = dealState,
+                        humanSeat = view.seat,
+                        timings = dealTimings(animationSpeed),
+                    )
+                } else {
+                    ActionArea(
+                        view = view,
+                        botNames = botNames,
+                        sortHand = sortHand,
+                        onToggleSort = { sortHand = !sortHand },
+                        onBid = onBid,
+                        onDiscard = onDiscard,
+                        onPlay = onPlay,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                monetization.BannerSlot(Modifier.fillMaxWidth())
             }
-            Spacer(Modifier.height(8.dp))
-            monetization.BannerSlot(Modifier.fillMaxWidth())
+            // The one card back currently in flight from the deck to a pile, drawn above everything.
+            FlyingDealCard(dealState)
         }
     }
 
@@ -354,7 +356,7 @@ private fun ContractLine(view: PlayerView, botNames: Map<Seat, String>) {
 }
 
 @Composable
-private fun OpponentsRow(view: PlayerView, botNames: Map<Seat, String>) {
+private fun OpponentsRow(view: PlayerView, botNames: Map<Seat, String>, dealState: DealAnimationState) {
     // With 5 opponents (6-player game) the row gets tight: shrink each column and allow the row to
     // scroll horizontally as a safety valve on narrow screens.
     val compact = view.playerCount == 6
@@ -372,13 +374,19 @@ private fun OpponentsRow(view: PlayerView, botNames: Map<Seat, String>) {
         for (i in 0 until view.playerCount) {
             val seat = Seat(i)
             if (seat == view.seat) continue
-            OpponentStatus(view, botNames, seat, compact)
+            OpponentStatus(view, botNames, seat, compact, dealState)
         }
     }
 }
 
 @Composable
-private fun OpponentStatus(view: PlayerView, botNames: Map<Seat, String>, seat: Seat, compact: Boolean) {
+private fun OpponentStatus(
+    view: PlayerView,
+    botNames: Map<Seat, String>,
+    seat: Seat,
+    compact: Boolean,
+    dealState: DealAnimationState,
+) {
     val textStyle = if (compact) MaterialTheme.typography.bodySmall else LocalTextStyle.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         val active = seat in view.activeSeats
@@ -390,8 +398,13 @@ private fun OpponentStatus(view: PlayerView, botNames: Map<Seat, String>, seat: 
         if (teamOf(seat) == teamOf(view.seat)) {
             Text("(partner)", style = MaterialTheme.typography.labelSmall)
         }
-        if (active) CardBack(width = if (compact) 24.dp else 32.dp) else Text("(sitting out)", style = textStyle)
-        Text("cards: ${view.handSizes[seat] ?: 0}", style = textStyle)
+        if (active) {
+            OpponentPile(seat, dealState, width = if (compact) 32.dp else 44.dp)
+        } else {
+            Text("(sitting out)", style = textStyle)
+        }
+        val cardCount = if (dealState.dealing) dealState.dealtTo(seat) else view.handSizes[seat] ?: 0
+        Text("cards: $cardCount", style = textStyle)
         Text("tricks: ${view.tricksWon[seat] ?: 0}", style = textStyle)
         if (view.phase == Phase.BIDDING) {
             val lastAction = view.biddingHistory.lastOrNull { it.first == seat }?.second
@@ -441,7 +454,7 @@ private fun TrickArea(
     view: PlayerView,
     botNames: Map<Seat, String>,
     animationSpeed: AnimationSpeed,
-    dealRound: Int?,
+    dealState: DealAnimationState,
     modifier: Modifier = Modifier,
 ) {
     // The "felt" — a slightly darker rounded table centre where the current trick lands.
@@ -452,8 +465,13 @@ private fun TrickArea(
             .background(Color(0x22000000), RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        if (dealRound != null) {
-            DealingOverlay(view, botNames, dealRound)
+        if (dealState.dealing) {
+            // Deck + growing kitty pile while cards fly out.
+            DealFelt(dealState)
+        } else if (view.phase == Phase.BIDDING) {
+            // The kitty sits face down on the felt for the whole auction (all speeds, incl. OFF);
+            // it leaves the table once the contract is decided.
+            KittyPile(count = KITTY_SIZE)
         } else {
             AnimatedContent(
                 targetState = view,
@@ -488,77 +506,6 @@ private fun TrickArea(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 12.dp),
         )
-    }
-}
-
-/**
- * The dealing animation shown on the felt while a new hand is dealt: 500 deals in rounds of
- * 3, then 4, then 3 cards to each seat, with one card to the kitty after each round. Each step
- * grows every seat's pile of card backs (3 → 7 → 10) and the kitty pile (1 → 2 → 3).
- */
-@Composable
-private fun DealingOverlay(view: PlayerView, botNames: Map<Seat, String>, round: Int) {
-    val cardsEach = listOf(0, 3, 7, 10)[round.coerceIn(0, 3)]
-    val kittyCards = round.coerceIn(0, 3)
-    val compact = view.playerCount == 6
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("Dealing…", fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 20.dp),
-        ) {
-            for (i in 0 until view.playerCount) {
-                val seat = Seat(i)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        seatLabel(view, botNames, seat),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    CardPile(count = cardsEach, cardWidth = if (compact) 18.dp else 24.dp)
-                    Spacer(Modifier.height(4.dp))
-                    AnimatedContent(
-                        targetState = cardsEach,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "dealCount",
-                    ) { n -> Text("$n", style = MaterialTheme.typography.labelSmall) }
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Kitty", style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(4.dp))
-            CardPile(count = kittyCards, cardWidth = if (compact) 18.dp else 24.dp)
-            Spacer(Modifier.height(4.dp))
-            AnimatedContent(
-                targetState = kittyCards,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "kittyCount",
-            ) { n -> Text("$n", style = MaterialTheme.typography.labelSmall) }
-        }
-    }
-}
-
-/** A fanned pile of [count] card backs that grows smoothly as rounds are dealt. */
-@Composable
-private fun CardPile(count: Int, cardWidth: Dp) {
-    val fanStep = cardWidth / 6
-    Box(modifier = Modifier.animateContentSize()) {
-        // Hold the slot's height before any card lands so the layout doesn't jump.
-        Spacer(Modifier.height(cardWidth * 1.4f))
-        repeat(count) { i ->
-            Box(Modifier.padding(start = fanStep * i)) {
-                CardBack(width = cardWidth)
-            }
-        }
     }
 }
 
