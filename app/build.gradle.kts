@@ -26,14 +26,18 @@ android {
     productFlavors {
         create("foss") {
             dimension = "distribution"
+            // Feedback goes to the public issue tracker — F-Droid users have GitHub, not Play.
+            buildConfigField("String", "FEEDBACK_URI", "\"https://github.com/rotund-tapir/500/issues\"")
         }
         create("play") {
             dimension = "distribution"
+            buildConfigField("String", "FEEDBACK_URI", "\"mailto:rotund_tapir@protonmail.com\"")
         }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     buildTypes {

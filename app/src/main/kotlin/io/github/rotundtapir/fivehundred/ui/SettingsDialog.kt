@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.BuildConfig
 
 private const val CARD_ART_URL = "https://code.google.com/archive/p/vector-playing-cards/"
 
@@ -131,6 +132,14 @@ fun SettingsDialog(
                     onClick = { showRules = true },
                     modifier = Modifier.fillMaxWidth().testTag("helpButton"),
                 ) { Text("Help — rules of 500") }
+                val uriHandler = LocalUriHandler.current
+                OutlinedButton(
+                    onClick = {
+                        // FOSS: the GitHub issue tracker; Play: a mailto to the developer.
+                        runCatching { uriHandler.openUri(BuildConfig.FEEDBACK_URI) }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("feedbackButton"),
+                ) { Text("Submit feedback") }
                 OutlinedButton(
                     onClick = { showAcknowledgments = true },
                     modifier = Modifier.fillMaxWidth().testTag("acknowledgments"),
