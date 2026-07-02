@@ -24,7 +24,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -106,22 +105,6 @@ fun HomeScreen(
                         contentColor = MaterialTheme.colorScheme.primary,
                     ),
                 ) { Text("New Game", fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.height(16.dp))
-
-                val adsRemoved by monetization.adsRemoved.collectAsState()
-                OutlinedButton(
-                    onClick = { monetization.launchRemoveAdsOrDonate(activity) },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
-                ) {
-                    Text(
-                        when {
-                            !monetization.offersRemoveAds -> "Support development"
-                            adsRemoved -> "Ads removed — thank you!"
-                            else -> "Remove ads"
-                        }
-                    )
-                }
 
                 Spacer(Modifier.height(24.dp))
                 monetization.BannerSlot(Modifier.fillMaxWidth())
@@ -135,6 +118,8 @@ fun HomeScreen(
             onCycleAnimationSpeed = onCycleAnimationSpeed,
             sortByDefault = sortByDefault,
             onSetSortByDefault = onSetSortByDefault,
+            monetization = monetization,
+            activity = activity,
             onDismiss = { showSettings = false },
         )
     }

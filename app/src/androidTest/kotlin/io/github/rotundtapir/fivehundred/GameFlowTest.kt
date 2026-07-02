@@ -101,8 +101,20 @@ class GameFlowTest {
     fun homeScreen_showsTitleAndActions() {
         rule.onNodeWithText("500").assertIsDisplayed()
         rule.onNodeWithText("New Game").assertIsDisplayed()
+        rule.onNodeWithTag("settingsButton").assertIsDisplayed()
+    }
+
+    @Test
+    fun settingsDialog_hasSupportAndAcknowledgments() {
+        rule.onNodeWithTag("settingsButton").performClick()
         // FOSS flavor: a donation link, never an ads purchase.
         rule.onNodeWithText("Support development").assertIsDisplayed()
+        rule.onNodeWithTag("acknowledgments").performClick()
+        // The card artist must be credited.
+        waitForText("Byron Knoll", substring = true)
+        rule.onNodeWithTag("acknowledgmentsClose").performClick()
+        rule.onNodeWithText("Done").performClick()
+        rule.onNodeWithText("New Game").assertIsDisplayed()
     }
 
     @Test
