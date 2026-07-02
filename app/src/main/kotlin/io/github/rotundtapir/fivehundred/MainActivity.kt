@@ -20,6 +20,8 @@ import io.github.rotundtapir.cardkit.ui.theme.CardkitTheme
 import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
 import io.github.rotundtapir.fivehundred.ui.HomeScreen
+import io.github.rotundtapir.fivehundred.ui.TUTORIAL_SEED
+import io.github.rotundtapir.fivehundred.ui.TutorialScriptState
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -99,14 +101,29 @@ private fun FiveHundredApp(
     var modeName by rememberSaveable { mutableStateOf(GameMode.FOUR_PLAYER.name) }
     val mode = GameMode.valueOf(modeName)
 
+    // The interactive "How to play" tutorial: a scripted hand on TUTORIAL_SEED. The step index is
+    // saveable so an activity recreation mid-tutorial resumes at the same point in the script.
+    var tutorialActive by rememberSaveable { mutableStateOf(false) }
+    var tutorialStepIndex by rememberSaveable { mutableStateOf(0) }
+    val startTutorial: () -> Unit = {
+        // The tutorial script depends on the exact table: 4 players, 2 teams, misère and no-trumps
+        // enabled — pinned here regardless of the user's mode selection and house-rule settings.
+        vm.newGame(TUTORIAL_SEED, playerCount = 4, misereEnabled = true, noTrumpsEnabled = true, teamCount = 2)
+        tutorialStepIndex = 0
+        tutorialActive = true
+        inGame = true
+    }
+
     if (!inGame) {
         HomeScreen(
             monetization = monetization,
             activity = activity,
             onNewGame = {
                 vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
+                tutorialActive = false
                 inGame = true
             },
+            onStartTutorial = startTutorial,
             animationSpeed = animationSpeed,
             onCycleAnimationSpeed = cycleAnimationSpeed,
             sortByDefault = sortByDefault,
@@ -124,7 +141,11 @@ private fun FiveHundredApp(
             HomeScreen(
                 monetization = monetization,
                 activity = activity,
-                onNewGame = { vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams) },
+                onNewGame = {
+                    vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
+                    tutorialActive = false
+                },
+                onStartTutorial = startTutorial,
                 animationSpeed = animationSpeed,
                 onCycleAnimationSpeed = cycleAnimationSpeed,
                 sortByDefault = sortByDefault,
@@ -147,7 +168,13 @@ private fun FiveHundredApp(
                 onBid = vm::placeBid,
                 onDiscard = vm::discard,
                 onPlay = { card -> vm.playCard(card) },
-                onExit = { inGame = false },
+                onExit = {
+                    inGame = false
+                    tutorialActive = false
+                },
+                tutorial = if (tutorialActive) {
+                    TutorialScriptState(tutorialStepIndex) { tutorialStepIndex++ }
+                } else null,
             )
         }
     }

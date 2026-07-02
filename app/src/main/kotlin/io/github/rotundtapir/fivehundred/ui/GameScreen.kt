@@ -107,8 +107,11 @@ fun GameScreen(
     onDiscard: (List<Card>) -> Unit,
     onPlay: (Card) -> Unit,
     onExit: () -> Unit,
+    tutorial: TutorialScriptState? = null,
 ) {
     var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
+    // Set once the tutorial's scripted hand has been scored and its result dialog dismissed.
+    var tutorialComplete by rememberSaveable { mutableStateOf(false) }
 
     // Dealing animation: on each new hand (unless animations are OFF) fly card backs one at a time
     // from a centre deck to each seat's pile / the kitty in 500's 3-4-3 packet order, then flip the
@@ -152,6 +155,9 @@ fun GameScreen(
                     dealState = dealState,
                     modifier = Modifier.weight(1f),
                 )
+                if (tutorial != null) {
+                    TutorialAdviceCard(tutorial, view)
+                }
                 if (dealState.dealing) {
                     DealingHandRow(
                         cards = if (sortHand) sortedForDisplay(view.hand, view.trump) else view.hand,
@@ -168,6 +174,7 @@ fun GameScreen(
                         onBid = onBid,
                         onDiscard = onDiscard,
                         onPlay = onPlay,
+                        tutorial = tutorial,
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -197,7 +204,57 @@ fun GameScreen(
         )
     }
 
-    HandResultDialog(view, botNames)
+    HandResultDialog(view, botNames, onDismissed = { if (tutorial != null) tutorialComplete = true })
+
+    if (tutorial != null && tutorialComplete) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Tutorial complete") },
+            text = { Text(TUTORIAL_COMPLETION) },
+            confirmButton = {
+                TextButton(onClick = onExit, modifier = Modifier.testTag("tutorialCompleteContinue")) {
+                    Text("Continue")
+                }
+            },
+            modifier = Modifier.testTag("tutorialComplete"),
+        )
+    }
+}
+
+/**
+ * The tutorial guidance panel, shown above the action area: the current step's advice when the
+ * script is waiting on the human, otherwise a short "watch" line while the bots act.
+ */
+@Composable
+private fun TutorialAdviceCard(tutorial: TutorialScriptState, view: PlayerView) {
+    val step = tutorial.step
+    val isHumanDecision = when (step) {
+        is TutorialStep.BidStep -> view.phase == Phase.BIDDING && view.isMyTurn
+        is TutorialStep.DiscardStep -> view.phase == Phase.KITTY && view.mustDiscard > 0
+        is TutorialStep.PlayStep -> view.phase == Phase.PLAY && view.isMyTurn
+        null -> false
+    }
+    val text = when {
+        step == null -> "That's the whole hand — see how it scored."
+        isHumanDecision -> step.advice
+        else -> "Watch the table — the other players are acting…"
+    }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFFAFAFA),
+        contentColor = MaterialTheme.colorScheme.primary,
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .testTag("tutorialAdvice"),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Text("Tutorial", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(2.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall)
+        }
+    }
 }
 
 /**
@@ -250,11 +307,19 @@ private fun TrickWinnerPopup(
 }
 
 @Composable
-private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
+private fun HandResultDialog(
+    view: PlayerView,
+    botNames: Map<Seat, String>,
+    onDismissed: () -> Unit = {},
+) {
     val result = view.lastHandResult ?: return
     if (view.winner != null) return // the winner dialog handles game end
     var dismissed by remember(view.lastHandResult) { mutableStateOf(false) }
     if (dismissed) return
+    val dismiss = {
+        dismissed = true
+        onDismissed()
+    }
 
     val contract = result.contract
     val declarerTeam = teamOf(contract.declarer, view.teamCount)
@@ -295,7 +360,7 @@ private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
     val headerColor = if (gained) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
     val onHeaderColor = if (gained) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
 
-    Dialog(onDismissRequest = { dismissed = true }) {
+    Dialog(onDismissRequest = dismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -328,7 +393,7 @@ private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
                     }
                     Spacer(Modifier.height(4.dp))
                     Button(
-                        onClick = { dismissed = true },
+                        onClick = dismiss,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("handResultContinue"),
@@ -582,7 +647,10 @@ private fun ActionArea(
     onBid: (Bid) -> Unit,
     onDiscard: (List<Card>) -> Unit,
     onPlay: (Card) -> Unit,
+    tutorial: TutorialScriptState? = null,
 ) {
+    // In the tutorial only the scripted action is enabled, and taking it advances the script.
+    val step = tutorial?.step
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         // "You" mirror of the opponents' status line — during the auction it shows your latest bid instead.
         val myLastBid =
@@ -598,16 +666,52 @@ private fun ActionArea(
         Spacer(Modifier.height(4.dp))
         when {
             view.phase == Phase.BIDDING && view.isMyTurn -> {
-                BiddingPanel(view, onBid)
+                BiddingPanel(
+                    view = view,
+                    onBid = { bid ->
+                        tutorial?.onAdvance()
+                        onBid(bid)
+                    },
+                    bidEnabled = if (tutorial == null) {
+                        { true }
+                    } else {
+                        { it == (step as? TutorialStep.BidStep)?.bid }
+                    },
+                )
                 HumanHand(view, sortHand, onToggleSort, playable = { false }, dimUnplayable = false, onClick = {})
             }
             view.phase == Phase.KITTY && view.mustDiscard > 0 -> {
-                DiscardPanel(view, sortHand, onToggleSort, onDiscard)
+                DiscardPanel(
+                    view = view,
+                    sortHand = sortHand,
+                    onToggleSort = onToggleSort,
+                    onDiscard = { cards ->
+                        tutorial?.onAdvance()
+                        onDiscard(cards)
+                    },
+                    requiredDiscards = if (tutorial == null) {
+                        null
+                    } else {
+                        (step as? TutorialStep.DiscardStep)?.cards?.toSet() ?: emptySet()
+                    },
+                )
             }
             view.phase == Phase.PLAY && view.isMyTurn -> {
                 Text("Your turn — tap a card to play")
                 Spacer(Modifier.height(4.dp))
-                HumanHand(view, sortHand, onToggleSort, playable = { it in view.legalPlays }, onClick = onPlay)
+                val scriptedCard = (step as? TutorialStep.PlayStep)?.card
+                HumanHand(
+                    view = view,
+                    sortHand = sortHand,
+                    onToggleSort = onToggleSort,
+                    playable = { card ->
+                        card in view.legalPlays && (tutorial == null || card == scriptedCard)
+                    },
+                    onClick = { card ->
+                        tutorial?.onAdvance()
+                        onPlay(card)
+                    },
+                )
             }
             else -> {
                 Text(view.toAct?.let { "Waiting for ${seatLabel(view, botNames, it)}…" } ?: "")
@@ -619,7 +723,11 @@ private fun ActionArea(
 }
 
 @Composable
-private fun BiddingPanel(view: PlayerView, onBid: (Bid) -> Unit) {
+private fun BiddingPanel(
+    view: PlayerView,
+    onBid: (Bid) -> Unit,
+    bidEnabled: (Bid) -> Boolean = { true },
+) {
     // Guard against double taps: one bid per PlayerView.
     var acted by remember(view) { mutableStateOf(false) }
     Text("Your bid:", fontWeight = FontWeight.Bold)
@@ -635,7 +743,7 @@ private fun BiddingPanel(view: PlayerView, onBid: (Bid) -> Unit) {
                     acted = true
                     onBid(bid)
                 },
-                enabled = !acted,
+                enabled = !acted && bidEnabled(bid),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                 modifier = Modifier.testTag("bid:${bid.label}"),
@@ -651,6 +759,9 @@ private fun DiscardPanel(
     sortHand: Boolean,
     onToggleSort: () -> Unit,
     onDiscard: (List<Card>) -> Unit,
+    // Tutorial constraint: when non-null, only these cards are selectable and the discard arms
+    // only once exactly they are selected.
+    requiredDiscards: Set<Card>? = null,
 ) {
     var selected by remember(view.hand) { mutableStateOf(emptySet<Card>()) }
     // Guard against double taps: one discard per PlayerView.
@@ -662,7 +773,8 @@ private fun DiscardPanel(
             acted = true
             onDiscard(selected.toList())
         },
-        enabled = selected.size == KITTY_SIZE && !acted,
+        enabled = selected.size == KITTY_SIZE && !acted &&
+            (requiredDiscards == null || selected == requiredDiscards),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFFFAFAFA),
             contentColor = MaterialTheme.colorScheme.primary,
@@ -674,7 +786,7 @@ private fun DiscardPanel(
         view = view,
         sortHand = sortHand,
         onToggleSort = onToggleSort,
-        playable = { true },
+        playable = { requiredDiscards == null || it in requiredDiscards },
         selected = selected,
         onClick = { card ->
             selected = if (card in selected) selected - card

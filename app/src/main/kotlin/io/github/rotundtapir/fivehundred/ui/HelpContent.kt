@@ -2,171 +2,46 @@
 package io.github.rotundtapir.fivehundred.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.rotundtapir.cardkit.core.Rank
-import io.github.rotundtapir.cardkit.core.Suit
-import io.github.rotundtapir.cardkit.core.SuitedCard
-import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.engine.ScoreSchedule
 import io.github.rotundtapir.fivehundred.engine.Trump
 
 // ------------------------------------------------------------------------------------------------
-// Walkthrough (home screen → "How to play")
+// Tutorial intro (home screen → "How to play" → the interactive scripted hand)
 // ------------------------------------------------------------------------------------------------
 
-private data class WalkthroughPage(val title: String, val body: String, val showBowers: Boolean = false)
-
-private val walkthroughPages = listOf(
-    WalkthroughPage(
-        "Welcome to 500",
-        "500 is a trick-taking card game played in teams — in the standard four-player game you " +
-            "partner the seat opposite you. Six players form two teams of three or three teams " +
-            "of two, and two players go head to head.\n\n" +
-            "Your team wins by being first to +500 points — but you can also LOSE by falling to " +
-            "−500, so wild bidding has a price.",
-    ),
-    WalkthroughPage(
-        "The deal",
-        "Everyone receives 10 cards, dealt in packets of 3, 4, then 3, with one card set aside to " +
-            "the kitty after each round — 3 kitty cards in all.\n\n" +
-            "The 4-player deck has 43 cards: no 2s or 3s, no black 4s, plus the Joker. Six-handed " +
-            "games add the 11s, 12s and red 13s (63 cards).",
-    ),
-    WalkthroughPage(
-        "Bidding",
-        "Starting left of the dealer, players bid the number of tricks their team will win (6–10) " +
-            "and the trump suit — or no trumps. Each bid must outrank the last; suits rank " +
-            "♠ ♣ ♦ ♥ NT from lowest to highest. Passing drops you out of the auction.\n\n" +
-            "Misère (win NO tricks) and Open Misère are special bids — see the full rules for " +
-            "where they slot in. If everyone passes, the hand is thrown in and redealt.",
-    ),
-    WalkthroughPage(
-        "The kitty",
-        "Whoever wins the auction becomes the declarer, picks up the 3 kitty cards, and discards " +
-            "any 3 cards face down. Choose your discards to strengthen the trump suit you named.",
-    ),
-    WalkthroughPage(
-        "Trick play",
-        "The declarer leads the first trick. You must follow the led suit if you can; when you " +
-            "can't, play anything — including a trump, which beats every plain card.\n\n" +
-            "The two highest trumps are the JACKS: the Jack of trumps (right bower) and the Jack " +
-            "of the same-colour suit (left bower — it counts as a trump, not its printed suit). " +
-            "The Joker beats everything.",
-        showBowers = true,
-    ),
-    WalkthroughPage(
-        "Scoring",
-        "Make your contract and your team scores its value; fail and you lose that value. The " +
-            "defending team scores 10 points per trick they take either way.\n\n" +
-            "Winning every one of the 10 tricks is worth at least 250. First team to +500 on " +
-            "their own contract wins; hit −500 and you lose \"out the back door\".",
-    ),
-    WalkthroughPage(
-        "Around the table",
-        "During bidding each opponent's latest call is shown under their name. The kitty stays " +
-            "visible in the centre until the auction ends, the completed trick lingers with its " +
-            "winner named, and after every hand a summary shows the points.\n\n" +
-            "Tap \"Sorted\" above your hand to toggle sorting, and use the ⚙ menu for speeds and " +
-            "house rules. Good luck!",
-    ),
-)
-
-/** A short paged introduction to the game, opened from the home screen. */
+/** Confirmation shown before the interactive tutorial (see Tutorial.kt) deals its practice hand. */
 @Composable
-fun WalkthroughDialog(onDismiss: () -> Unit) {
-    var page by remember { mutableStateOf(0) }
-    val last = walkthroughPages.lastIndex
-    val current = walkthroughPages[page]
-
+fun TutorialIntroDialog(onStart: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(current.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.heightIn(min = 180.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(current.body)
-                        if (current.showBowers) BowerExample()
-                    }
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                ) {
-                    repeat(walkthroughPages.size) { i ->
-                        Box(
-                            Modifier
-                                .size(8.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = if (i == page) 1f else 0.3f),
-                                    CircleShape,
-                                ),
-                        )
-                    }
-                }
-            }
-        },
+        title = { Text("How to play") },
+        text = { Text(TUTORIAL_INTRO) },
         dismissButton = {
-            if (page > 0) {
-                TextButton(onClick = { page-- }) { Text("Back") }
-            } else {
-                TextButton(onClick = onDismiss) { Text("Skip") }
-            }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
         confirmButton = {
-            if (page < last) {
-                TextButton(onClick = { page++ }, modifier = Modifier.testTag("walkthroughNext")) {
-                    Text("Next")
-                }
-            } else {
-                TextButton(onClick = onDismiss, modifier = Modifier.testTag("walkthroughDone")) {
-                    Text("Done")
-                }
+            TextButton(onClick = onStart, modifier = Modifier.testTag("tutorialStart")) {
+                Text("Start")
             }
         },
     )
-}
-
-/** Hearts-trump example: the Joker and both bowers, strongest first. */
-@Composable
-private fun BowerExample() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PlayingCard(io.github.rotundtapir.cardkit.core.Joker, width = 52.dp)
-            PlayingCard(SuitedCard(Rank.JACK, Suit.HEARTS), width = 52.dp)
-            PlayingCard(SuitedCard(Rank.JACK, Suit.DIAMONDS), width = 52.dp)
-        }
-        Spacer(Modifier.height(4.dp))
-        Text("Hearts trump: Joker, right bower, left bower", style = MaterialTheme.typography.labelSmall)
-    }
 }
 
 // ------------------------------------------------------------------------------------------------

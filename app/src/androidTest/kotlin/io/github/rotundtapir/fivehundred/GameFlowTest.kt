@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,6 +20,9 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.rotundtapir.fivehundred.engine.label
+import io.github.rotundtapir.fivehundred.ui.TutorialStep
+import io.github.rotundtapir.fivehundred.ui.tutorialSteps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -105,18 +109,103 @@ class GameFlowTest {
         rule.onNodeWithTag("settingsButton").assertIsDisplayed()
     }
 
-    @Test
-    fun walkthrough_opensNavigatesAndCloses() {
+    // ---------------------------------------------------------------------------------------------
+    // Interactive tutorial ("How to play"): a scripted hand on TUTORIAL_SEED where only the
+    // recommended action is enabled at each step. See ui/Tutorial.kt for the script.
+    // ---------------------------------------------------------------------------------------------
+
+    /** Taps "How to play" and confirms the intro, landing in the scripted tutorial hand. */
+    private fun startTutorial() {
         rule.onNodeWithTag("walkthroughButton").performClick()
-        waitForText("Welcome to 500")
-        // Page through to the end and finish.
-        repeat(10) {
-            if (!textExists("Done")) {
-                rule.onNodeWithTag("walkthroughNext").performClick()
-                rule.waitForIdle()
+        waitForText("Start")
+        rule.onNodeWithTag("tutorialStart").performClick()
+    }
+
+    private fun nodesWithTag(tag: String) =
+        rule.onAllNodes(hasTestTag(tag), useUnmergedTree = true).fetchSemanticsNodes()
+
+    @Test
+    fun tutorial_showsBidAdvice_andEnablesOnlyTheScriptedBid() {
+        startTutorial()
+        waitForBidPanel()
+
+        // The guidance panel shows the first step's advice (the scripted bid, with the reason).
+        val bidStep = tutorialSteps.first() as TutorialStep.BidStep
+        rule.waitUntil(STEP_TIMEOUT_MS) { textExists(bidStep.advice) }
+        rule.onNodeWithTag("tutorialAdvice").assertIsDisplayed()
+
+        // Only the scripted bid is tappable; everything else — even Pass — is disabled.
+        rule.onNodeWithTag("bid:${bidStep.bid.label}").performScrollTo().assertIsEnabled()
+        rule.onNodeWithTag("bid:Pass").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun tutorial_takingTheScriptedBid_advancesToTheDiscardStep() {
+        startTutorial()
+        waitForBidPanel()
+        val bidStep = tutorialSteps[0] as TutorialStep.BidStep
+        val discardStep = tutorialSteps[1] as TutorialStep.DiscardStep
+        rule.waitUntil(STEP_TIMEOUT_MS) { textExists(bidStep.advice) }
+
+        rule.onNodeWithTag("bid:${bidStep.bid.label}").performScrollTo().performClick()
+
+        // The advice changes to the kitty-exchange step once the auction resolves.
+        rule.waitUntil(STEP_TIMEOUT_MS) { textExists(discardStep.advice) }
+        waitForText("Discard 3 cards", substring = true)
+    }
+
+    /**
+     * The whole feature end to end: plays the entire scripted hand through the constrained actions
+     * (at every step exactly one action is enabled) and asserts the completion dialog appears and
+     * exits to home.
+     */
+    @Test
+    fun tutorial_playsTheFullScriptedHand_toTheCompletionDialog() {
+        startTutorial()
+
+        val bidStep = tutorialSteps.first() as TutorialStep.BidStep
+        val deadline = System.currentTimeMillis() + 180_000
+        while (System.currentTimeMillis() < deadline && nodesWithTag("tutorialComplete").isEmpty()) {
+            rule.waitUntil(STEP_TIMEOUT_MS) {
+                nodesWithTag("tutorialComplete").isNotEmpty() ||
+                    textExists("Your bid:") ||
+                    textExists("Discard 3 cards", substring = true) ||
+                    textExists("Your turn — tap a card to play") ||
+                    textExists("Contract made!")
+            }
+            when {
+                nodesWithTag("tutorialComplete").isNotEmpty() -> break
+                textExists("Contract made!") -> {
+                    rule.onNodeWithTag("handResultContinue").performClick()
+                    rule.waitForIdle()
+                }
+                textExists("Your bid:") -> {
+                    rule.onNodeWithTag("bid:${bidStep.bid.label}").performScrollTo().performClick()
+                    rule.waitForIdle()
+                }
+                textExists("Discard 3 cards", substring = true) -> {
+                    // Only the three scripted discards are selectable.
+                    repeat(3) { i ->
+                        clickableCards()[i].performScrollTo().performClick()
+                        rule.waitForIdle()
+                    }
+                    waitForText("(3/3 selected)", substring = true)
+                    rule.onNodeWithTag("discardButton").assertIsEnabled().performClick()
+                    rule.waitForIdle()
+                }
+                textExists("Your turn — tap a card to play") -> {
+                    // Exactly one card — the scripted one — is playable.
+                    val playable = clickableCards()
+                    if (playable.fetchSemanticsNodes().size == 1) {
+                        playable[0].performScrollTo().performClick()
+                        rule.waitForIdle()
+                    }
+                }
             }
         }
-        rule.onNodeWithTag("walkthroughDone").performClick()
+
+        rule.onNodeWithTag("tutorialComplete").assertIsDisplayed()
+        rule.onNodeWithTag("tutorialCompleteContinue").performClick()
         rule.onNodeWithText("New Game").assertIsDisplayed()
     }
 

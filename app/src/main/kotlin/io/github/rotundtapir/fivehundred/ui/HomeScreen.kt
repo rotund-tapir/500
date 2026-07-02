@@ -61,6 +61,7 @@ fun HomeScreen(
     monetization: Monetization,
     activity: Activity,
     onNewGame: () -> Unit,
+    onStartTutorial: () -> Unit,
     animationSpeed: AnimationSpeed,
     onCycleAnimationSpeed: () -> Unit,
     sortByDefault: Boolean,
@@ -73,7 +74,7 @@ fun HomeScreen(
     onModeChange: (GameMode) -> Unit,
 ) {
     var showSettings by remember { mutableStateOf(false) }
-    var showWalkthrough by remember { mutableStateOf(false) }
+    var showTutorialIntro by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -137,7 +138,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(16.dp))
 
                 OutlinedButton(
-                    onClick = { showWalkthrough = true },
+                    onClick = { showTutorialIntro = true },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                     modifier = Modifier.testTag("walkthroughButton"),
@@ -149,8 +150,14 @@ fun HomeScreen(
         }
     }
 
-    if (showWalkthrough) {
-        WalkthroughDialog(onDismiss = { showWalkthrough = false })
+    if (showTutorialIntro) {
+        TutorialIntroDialog(
+            onStart = {
+                showTutorialIntro = false
+                onStartTutorial()
+            },
+            onDismiss = { showTutorialIntro = false },
+        )
     }
     if (showSettings) {
         SettingsDialog(
