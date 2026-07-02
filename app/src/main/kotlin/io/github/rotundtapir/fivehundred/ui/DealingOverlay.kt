@@ -50,11 +50,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The dealing animation for a new hand of 500: single card backs fly, one at a time, from a deck
- * in the centre of the felt to each destination in 500's packet order — 3 to each player then one
- * to the kitty, then 4 each + kitty, then 3 each + kitty. Opponents' piles grow in the opponents
- * row, the kitty pile grows on the felt, and the human's cards accumulate face down at the bottom
- * of the screen, then flip face up (with a small left-to-right stagger) when the deal completes.
+ * The dealing animation for a new hand of 500: card backs fly from a deck in the centre of the
+ * felt to each destination in 500's true packet order — a visible packet of 3 to each player then
+ * one card to the kitty, then packets of 4 + kitty, then 3 + kitty. Opponents' piles grow in the
+ * opponents row, the kitty pile grows on the felt, and the human's cards accumulate face down at
+ * the bottom of the screen, then flip face up (with a small left-to-right stagger) when the deal
+ * completes.
  *
  * Everything here is presentational: the engine has already dealt, and the ViewModel holds the
  * first bidder for `dealPauseMillis`, so the whole animation (flights + flip) must finish inside
@@ -78,8 +79,11 @@ internal class DealAnimationState {
     /** Cards landed so far, per destination. */
     val counts = mutableStateMapOf<DealTarget, Int>()
 
-    /** Non-null while exactly one card back is in flight towards this target. */
+    /** Non-null while exactly one packet is in flight towards this target. */
     var flyingTarget by mutableStateOf<DealTarget?>(null)
+
+    /** How many card backs the in-flight packet contains (3/4 to a seat, 1 to the kitty). */
+    var flyingCount by mutableStateOf(1)
 
     /** Centre of the in-flight card, in root coordinates. */
     val flyingPos = Animatable(Offset.Zero, Offset.VectorConverter)
@@ -105,18 +109,23 @@ internal fun Modifier.dealAnchor(state: DealAnimationState, key: Any): Modifier 
 /**
  * Per-speed budgets. The flights self-correct against a deadline (frame quantisation would
  * otherwise accumulate), and flight + flip must total under the ViewModel's deal hold with
- * ~200ms slack: SLOW 4200 → 3300+660=3960, NORMAL 2500 → 1750+492=2242, FAST 1200 → 700+275=975.
+ * ~250ms slack: SLOW 5200 → 4200+690=4890, NORMAL 3500 → 2800+492=3292, FAST 1600 → 1100+275=1375.
+ * Packet dealing means only 3×(players+1) flights (15 at four players), so each flight is long
+ * enough to actually watch — ~180ms at Normal, ~280ms at Slow.
  */
 internal data class DealTimings(val flyBudgetMillis: Long, val flipMillis: Int, val flipStaggerMillis: Int)
 
 internal fun dealTimings(speed: AnimationSpeed): DealTimings = when (speed) {
-    AnimationSpeed.SLOW -> DealTimings(flyBudgetMillis = 3_300, flipMillis = 300, flipStaggerMillis = 40)
-    AnimationSpeed.FAST -> DealTimings(flyBudgetMillis = 700, flipMillis = 140, flipStaggerMillis = 15)
-    else -> DealTimings(flyBudgetMillis = 1_750, flipMillis = 240, flipStaggerMillis = 28)
+    AnimationSpeed.SLOW -> DealTimings(flyBudgetMillis = 4_200, flipMillis = 300, flipStaggerMillis = 40)
+    AnimationSpeed.FAST -> DealTimings(flyBudgetMillis = 1_100, flipMillis = 140, flipStaggerMillis = 15)
+    else -> DealTimings(flyBudgetMillis = 2_800, flipMillis = 240, flipStaggerMillis = 28)
 }
 
-/** Flights shorter than this read as teleports anyway; skip the animation and just land the card. */
+/** Flights shorter than this read as teleports anyway; skip the animation and just land the packet. */
 private const val MIN_FLIGHT_MILLIS = 8
+
+/** Fraction of each flight slot spent moving; the rest is a beat between packets. */
+private const val FLIGHT_FRACTION = 0.8f
 
 /**
  * Drives one full deal. Suspends until the flip has finished; always leaves the state at
@@ -129,25 +138,25 @@ internal suspend fun runDealAnimation(
     speed: AnimationSpeed,
 ) {
     val timings = dealTimings(speed)
-    val totalCards = playerCount * 10 + 3
+    val totalFlights = 3 * (playerCount + 1)
     try {
         state.counts.clear()
         state.stage = DealStage.DEALING
         val startNanos = System.nanoTime()
         var flown = 0
-        // Deal order: eldest hand (left of dealer) first, dealer last — packets of 3/4/3 per seat,
-        // one kitty card after each full round of packets.
+        // Deal order: eldest hand (left of dealer) first, dealer last — a visible packet of 3/4/3
+        // cards per seat, then a single card to the kitty after each full round of packets.
         val seats = (1..playerCount).map { Seat((dealer.index + it) % playerCount) }
-        suspend fun fly(target: DealTarget) {
+        suspend fun fly(target: DealTarget, cards: Int) {
             val elapsed = (System.nanoTime() - startNanos) / 1_000_000
             val remaining = timings.flyBudgetMillis - elapsed
-            val duration = (remaining / (totalCards - flown)).toInt()
-            state.flyOne(target, duration)
+            val slot = (remaining / (totalFlights - flown)).toInt()
+            state.flyPacket(target, cards, slot)
             flown++
         }
         for (packet in intArrayOf(3, 4, 3)) {
-            for (seat in seats) repeat(packet) { fly(DealTarget.SeatPile(seat)) }
-            fly(DealTarget.Kitty)
+            for (seat in seats) fly(DealTarget.SeatPile(seat), packet)
+            fly(DealTarget.Kitty, 1)
         }
         state.stage = DealStage.FLIPPING
         delay(timings.flipMillis + timings.flipStaggerMillis * 9L + 30L)
@@ -157,16 +166,22 @@ internal suspend fun runDealAnimation(
     }
 }
 
-private suspend fun DealAnimationState.flyOne(target: DealTarget, durationMillis: Int) {
+private suspend fun DealAnimationState.flyPacket(target: DealTarget, cards: Int, slotMillis: Int) {
     val from = awaitAnchor(DeckAnchor)
     val to = awaitAnchor(target)
-    if (from != null && to != null && durationMillis >= MIN_FLIGHT_MILLIS) {
+    val flightMillis = (slotMillis * FLIGHT_FRACTION).toInt()
+    if (from != null && to != null && flightMillis >= MIN_FLIGHT_MILLIS) {
         flyingPos.snapTo(from)
+        flyingCount = cards
         flyingTarget = target
-        flyingPos.animateTo(to, tween(durationMillis, easing = FastOutSlowInEasing))
+        flyingPos.animateTo(to, tween(flightMillis, easing = FastOutSlowInEasing))
         flyingTarget = null
+        counts[target] = (counts[target] ?: 0) + cards
+        // A short beat between packets so each delivery registers.
+        delay((slotMillis - flightMillis).coerceAtLeast(0).toLong())
+    } else {
+        counts[target] = (counts[target] ?: 0) + cards
     }
-    counts[target] = (counts[target] ?: 0) + 1
 }
 
 /** Waits (briefly) for an anchor to be laid out; null if it never appears, so the deal can't hang. */
@@ -176,8 +191,9 @@ private suspend fun DealAnimationState.awaitAnchor(key: Any): Offset? =
     }
 
 private val FlyingCardWidth = 44.dp
+private val FlyingFanStep = 5.dp
 
-/** The single in-flight card back, drawn in a full-size overlay Box at root coordinates. */
+/** The in-flight packet — a small fanned stack of card backs — drawn at root coordinates. */
 @Composable
 internal fun FlyingDealCard(state: DealAnimationState) {
     if (state.flyingTarget == null) return
@@ -190,7 +206,11 @@ internal fun FlyingDealCard(state: DealAnimationState) {
             )
         },
     ) {
-        CardBack(width = FlyingCardWidth)
+        repeat(state.flyingCount) { i ->
+            Box(Modifier.offset(x = FlyingFanStep * i, y = FlyingFanStep * i / 3)) {
+                CardBack(width = FlyingCardWidth)
+            }
+        }
     }
 }
 

@@ -110,9 +110,9 @@ class GameViewModel : ViewModel() {
 
     /** Hold before the first bid of a hand — matches GameScreen's dealing-animation duration. */
     private fun dealPauseMillis(speed: AnimationSpeed): Long = when (speed) {
-        AnimationSpeed.SLOW -> 4200L
-        AnimationSpeed.NORMAL -> 2500L
-        AnimationSpeed.FAST -> 1200L
+        AnimationSpeed.SLOW -> 5200L
+        AnimationSpeed.NORMAL -> 3500L
+        AnimationSpeed.FAST -> 1600L
         AnimationSpeed.OFF -> 0L
     }
 
