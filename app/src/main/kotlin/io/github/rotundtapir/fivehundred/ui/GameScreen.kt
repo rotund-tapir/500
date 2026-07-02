@@ -400,7 +400,12 @@ private fun OpponentStatus(
             Text("(partner)", style = MaterialTheme.typography.labelSmall)
         }
         if (active) {
-            OpponentPile(seat, dealState, width = if (compact) 32.dp else 44.dp)
+            OpponentPile(
+                seat = seat,
+                state = dealState,
+                width = if (compact) 32.dp else 44.dp,
+                handSize = view.handSizes[seat] ?: 0,
+            )
         } else {
             Text("(sitting out)", style = textStyle)
         }

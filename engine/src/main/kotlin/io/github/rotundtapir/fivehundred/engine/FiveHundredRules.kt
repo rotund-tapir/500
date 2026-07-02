@@ -46,6 +46,27 @@ class FiveHundredRules(
         }
     }
 
+    /**
+     * Whether [bid] may be called over [highBid]: it must be enabled at this table, strictly
+     * outrank the current high bid, and — for Misère and Open Misère — the auction must already
+     * have reached seven tricks (a bid of 7♠ or higher, or an earlier misère), the traditional
+     * "misère after seven" gate.
+     */
+    private fun isBiddable(bid: Bid, highBid: Bid?): Boolean {
+        if (bid !in biddableLadder) return false
+        if (highBid != null && !schedule.outranks(bid, highBid)) return false
+        if (bid is Bid.Misere || bid is Bid.OpenMisere) {
+            val gateReached = when (highBid) {
+                null -> false
+                is Bid.Named -> highBid.level >= 7
+                Bid.Misere, Bid.OpenMisere -> true
+                Bid.Pass -> false // highBid is never Pass, but keep the when exhaustive
+            }
+            if (!gateReached) return false
+        }
+        return true
+    }
+
     private val deck: List<Card> = fiveHundredDeck(playerCount)
     private val allSeats: List<Seat> = (0 until playerCount).map { Seat(it) }
 
@@ -104,7 +125,7 @@ class FiveHundredRules(
             Phase.BIDDING -> buildList {
                 add(Action.PlaceBid(Bid.Pass))
                 biddableLadder
-                    .filter { state.bidding.highBid == null || schedule.outranks(it, state.bidding.highBid) }
+                    .filter { isBiddable(it, state.bidding.highBid) }
                     .forEach { add(Action.PlaceBid(it)) }
             }
             Phase.KITTY -> emptyList() // discard is a constructed action; the view says how many
@@ -120,7 +141,7 @@ class FiveHundredRules(
             buildList {
                 add(Bid.Pass)
                 biddableLadder
-                    .filter { state.bidding.highBid == null || schedule.outranks(it, state.bidding.highBid) }
+                    .filter { isBiddable(it, state.bidding.highBid) }
                     .forEach { add(it) }
             }
         } else emptyList()
@@ -176,9 +197,8 @@ class FiveHundredRules(
         val b = state.bidding
         val bid = action.bid
         if (bid != Bid.Pass) {
-            require(bid in biddableLadder) { "Bid ${bid.label} is disabled at this table" }
-            require(b.highBid == null || schedule.outranks(bid, b.highBid)) {
-                "Bid ${bid.label} does not outrank ${b.highBid?.label}"
+            require(isBiddable(bid, b.highBid)) {
+                "Bid ${bid.label} is not callable over ${b.highBid?.label ?: "an open auction"}"
             }
         }
         val passed = if (bid == Bid.Pass) b.passed + seat else b.passed

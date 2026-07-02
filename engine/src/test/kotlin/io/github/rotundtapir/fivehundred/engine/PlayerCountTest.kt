@@ -111,9 +111,14 @@ class PlayerCountTest {
         for (count in listOf(2, 4, 6)) {
             val rules = rules(count)
             var s = rules.newGame(seed = 5L)
+            // Misère is gated behind a seven bid: the opener bids 7♠, the next seat raises 7♣,
+            // then the opener calls Misère on their second turn and everyone else passes.
             val declarer = rules.currentActor(s)!!
+            s = rules.apply(s, declarer, Action.PlaceBid(Bid.Named(7, Trump.SPADES)))
+            s = rules.apply(s, rules.currentActor(s)!!, Action.PlaceBid(Bid.Named(7, Trump.CLUBS)))
+            repeat(count - 2) { s = rules.apply(s, rules.currentActor(s)!!, Action.PlaceBid(Bid.Pass)) }
             s = rules.apply(s, declarer, Action.PlaceBid(Bid.Misere))
-            repeat(count - 1) { s = rules.apply(s, rules.currentActor(s)!!, Action.PlaceBid(Bid.Pass)) }
+            s = rules.apply(s, rules.currentActor(s)!!, Action.PlaceBid(Bid.Pass))
             s = rules.apply(s, declarer, Action.ExchangeKitty(s.hands[declarer]!!.take(KITTY_SIZE)))
 
             val expectedOut = teammatesOf(declarer, count)

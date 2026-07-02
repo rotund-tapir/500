@@ -219,9 +219,10 @@ fun RulesDialog(onDismiss: () -> Unit) {
                 RuleSection(
                     "",
                     "Misère (win no tricks, played at no trumps, worth 250) ranks between 8♠ and " +
-                        "8♣, and like any bid may be made whenever it outranks the current high " +
-                        "bid. Open Misère is the highest bid of all (500): the declarer's hand is " +
-                        "exposed to the other players once play begins.\n\n" +
+                        "8♣, but may only be called once the bidding has reached seven tricks — " +
+                        "a bid of 7♠ or higher. Open Misère is the highest bid of all (500), " +
+                        "gated the same way: the declarer's hand is exposed to the other players " +
+                        "once play begins.\n\n" +
                         "On a Misère the declarer plays alone: their partner (both teammates at " +
                         "6 players) sits the hand out.",
                 )

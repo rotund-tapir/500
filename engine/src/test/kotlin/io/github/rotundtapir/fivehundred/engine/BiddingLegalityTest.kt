@@ -20,8 +20,12 @@ class BiddingLegalityTest {
     fun `a bid already made is never offered to later bidders`() {
         for (bid in schedule.ladder) {
             var state = rules.newGame(seed = 11)
-            val opener = rules.currentActor(state)!!
-            state = rules.apply(state, opener, Action.PlaceBid(bid))
+            // Misère-family bids are gated behind a seven bid, so open with 7♠ before calling them.
+            if (bid is Bid.Misere || bid is Bid.OpenMisere) {
+                state = rules.apply(state, rules.currentActor(state)!!, Action.PlaceBid(Bid.Named(7, Trump.SPADES)))
+            }
+            val bidder = rules.currentActor(state)!!
+            state = rules.apply(state, bidder, Action.PlaceBid(bid))
             if (state.phase != Phase.BIDDING) continue // top bid may end the auction structure early
 
             val next = rules.currentActor(state)!!

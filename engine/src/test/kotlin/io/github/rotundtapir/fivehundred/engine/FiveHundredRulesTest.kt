@@ -58,10 +58,14 @@ class FiveHundredRulesTest {
     @Test
     fun `misere seats out the declarer's partner`() {
         var s = rules.newGame(seed = 5L, firstDealer = Seat(0))
-        s = rules.apply(s, Seat(1), Action.PlaceBid(Bid.Misere))
-        s = rules.apply(s, Seat(2), Action.PlaceBid(Bid.Pass))
+        // Misère is gated behind a seven bid: seat 1 opens 7♠, seat 2 raises, and seat 1 calls
+        // Misère on its second turn, ending as declarer.
+        s = rules.apply(s, Seat(1), Action.PlaceBid(Bid.Named(7, Trump.SPADES)))
+        s = rules.apply(s, Seat(2), Action.PlaceBid(Bid.Named(7, Trump.CLUBS)))
         s = rules.apply(s, Seat(3), Action.PlaceBid(Bid.Pass))
         s = rules.apply(s, Seat(0), Action.PlaceBid(Bid.Pass))
+        s = rules.apply(s, Seat(1), Action.PlaceBid(Bid.Misere))
+        s = rules.apply(s, Seat(2), Action.PlaceBid(Bid.Pass))
         s = rules.apply(s, Seat(1), Action.ExchangeKitty(s.hands[Seat(1)]!!.take(3)))
 
         // Declarer seat 1's partner is seat 3, who sits out.

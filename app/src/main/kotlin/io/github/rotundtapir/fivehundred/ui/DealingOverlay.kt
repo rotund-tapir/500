@@ -262,23 +262,25 @@ internal fun DealFelt(state: DealAnimationState) {
 private val OpponentPileStep = 1.2.dp
 
 /**
- * An opponent's card-back slot. Normally a single back; while dealing it's a pile that thickens
- * as each flown card lands (a faint outline marks the empty slot before the first card arrives).
- * Both forms occupy the same footprint so the row doesn't jump when the deal ends.
+ * An opponent's card-back pile. While dealing it thickens as each flown packet lands (a faint
+ * outline marks the empty slot before the first card arrives); afterwards it stays a stack whose
+ * thickness tracks the cards actually left in that hand, thinning as they are played. Both forms
+ * occupy the same footprint so the row never jumps.
  */
 @Composable
-internal fun OpponentPile(seat: Seat, state: DealAnimationState, width: Dp) {
+internal fun OpponentPile(seat: Seat, state: DealAnimationState, width: Dp, handSize: Int) {
     Box(
         Modifier
             .size(width + OpponentPileStep * 4, width * 1.4f + OpponentPileStep * 4)
             .dealAnchor(state, DealTarget.SeatPile(seat)),
     ) {
-        if (!state.dealing) {
-            CardBack(width = width)
+        val cards = if (state.dealing) state.dealtTo(seat) else handSize
+        // One visual layer per two cards or so, capped: 10 cards ≈ 5 layers, thinning as they play.
+        val layers = ((cards + 1) / 2).coerceAtMost(5)
+        if (layers == 0) {
+            Box(Modifier.alpha(0.25f)) { CardBack(width = width) }
         } else {
-            val landed = state.dealtTo(seat)
-            if (landed == 0) Box(Modifier.alpha(0.25f)) { CardBack(width = width) }
-            repeat(landed.coerceAtMost(5)) { i ->
+            repeat(layers) { i ->
                 Box(Modifier.offset(x = OpponentPileStep * i, y = OpponentPileStep * i)) {
                     CardBack(width = width)
                 }
