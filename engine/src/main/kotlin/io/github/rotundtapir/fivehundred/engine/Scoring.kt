@@ -4,32 +4,33 @@ package io.github.rotundtapir.fivehundred.engine
 import io.github.rotundtapir.cardkit.core.Seat
 
 /**
- * Scores a completed hand.
+ * Scores a completed hand for a table of [teamCount] teams.
  *
- * Named contracts: the declaring side scores the contract value if it wins at least the bid number of
+ * Named contracts: the declaring team scores the contract value if it wins at least the bid number of
  * tricks (a clean sweep of all ten is worth at least 250 even for a cheaper bid), or loses the value
- * if it falls short; the defenders always score 10 per trick they take. Misère / Open Misère: the
- * declarer scores the value only by taking no tricks, otherwise loses it, and the defenders score
- * nothing.
+ * if it falls short; every other team scores 10 per trick its own members took. Misère / Open Misère:
+ * the declarer scores the value only by taking no tricks, otherwise loses it, and the defenders score
+ * nothing. [HandResult.teamDeltas] contains an entry for every team.
  */
 fun scoreHand(
     contract: Contract,
     tricksWon: Map<Seat, Int>,
     schedule: ScoreSchedule = ScoreSchedule.Avondale,
+    teamCount: Int = 2,
 ): HandResult {
-    val declarerTeam = teamOf(contract.declarer)
-    val otherTeam = 1 - declarerTeam
-    val declarerTricks = tricksWon.entries.filter { teamOf(it.key) == declarerTeam }.sumOf { it.value }
+    val declarerTeam = teamOf(contract.declarer, teamCount)
+    fun teamTricks(team: Int): Int =
+        tricksWon.entries.filter { teamOf(it.key, teamCount) == team }.sumOf { it.value }
+
+    val declarerTricks = teamTricks(declarerTeam)
     val value = schedule.value(contract.bid)
 
-    val declarerDelta: Int
-    val otherDelta: Int
     val made: Boolean
+    val declarerDelta: Int
 
     if (contract.isMisere) {
         made = declarerTricks == 0
         declarerDelta = if (made) value else -value
-        otherDelta = 0
     } else {
         made = declarerTricks >= contract.level
         declarerDelta = when {
@@ -37,32 +38,40 @@ fun scoreHand(
             declarerTricks == TRICKS_PER_HAND && value < 250 -> 250 // all-ten bonus floor
             else -> value
         }
-        val defenderTricks = TRICKS_PER_HAND - declarerTricks
-        otherDelta = 10 * defenderTricks
+    }
+
+    val teamDeltas = (0 until teamCount).associateWith { team ->
+        when {
+            team == declarerTeam -> declarerDelta
+            contract.isMisere -> 0
+            else -> 10 * teamTricks(team)
+        }
     }
 
     return HandResult(
         contract = contract,
         declarerTricks = declarerTricks,
         made = made,
-        teamDeltas = mapOf(declarerTeam to declarerDelta, otherTeam to otherDelta),
+        teamDeltas = teamDeltas,
     )
 }
 
 /**
  * Determines the match winner after applying a hand's deltas, or `null` if the match continues.
  *
- * The bidding side wins by reaching +500 on a made contract; either side loses (the other wins) by
- * dropping to −500. A non-bidding side's points alone do not end the match — it must win its own
- * contract — matching common house rules.
+ * The bidding team wins by reaching +500 on a made contract; a non-bidding team's points alone do
+ * not end the match — it must win its own contract — matching common house rules.
+ *
+ * Any team dropping to −500 ("out the back") ends the game immediately. With two teams the other
+ * team simply wins; with three teams the house interpretation used here is that the *best-scoring*
+ * of the remaining teams wins (ties broken by the lowest team index).
  */
-fun determineWinner(newScores: Map<Int, Int>, result: HandResult): Int? {
-    val declarerTeam = teamOf(result.contract.declarer)
-    val otherTeam = 1 - declarerTeam
-    return when {
-        result.made && (newScores[declarerTeam] ?: 0) >= WINNING_SCORE -> declarerTeam
-        (newScores[declarerTeam] ?: 0) <= -WINNING_SCORE -> otherTeam
-        (newScores[otherTeam] ?: 0) <= -WINNING_SCORE -> declarerTeam
-        else -> null
-    }
+fun determineWinner(newScores: Map<Int, Int>, result: HandResult, teamCount: Int = 2): Int? {
+    val declarerTeam = teamOf(result.contract.declarer, teamCount)
+    if (result.made && (newScores[declarerTeam] ?: 0) >= WINNING_SCORE) return declarerTeam
+
+    val bust = (0 until teamCount).filter { (newScores[it] ?: 0) <= -WINNING_SCORE }
+    if (bust.isEmpty()) return null
+    // maxByOrNull keeps the first (lowest-index) team on ties.
+    return (0 until teamCount).filter { it !in bust }.maxByOrNull { newScores[it] ?: 0 }
 }

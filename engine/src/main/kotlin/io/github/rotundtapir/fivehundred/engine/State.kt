@@ -9,21 +9,22 @@ import io.github.rotundtapir.cardkit.core.Suit
 enum class Phase { BIDDING, KITTY, PLAY, COMPLETE }
 
 /**
- * Team index: even seats are team 0, odd seats team 1. This yields the standard partnerships at
- * every supported count — 2 players: each seat is its own team; 4: seats 0&2 vs 1&3; 6: two teams
- * of three, 0&2&4 vs 1&3&5.
+ * Team index: seat modulo [teamCount]. With 2 teams this yields the standard partnerships at every
+ * supported count — 2 players: each seat is its own team; 4: seats 0&2 vs 1&3; 6: two teams of
+ * three, 0&2&4 vs 1&3&5. With 3 teams (6 players only) it yields three teams of two with partners
+ * seated opposite: 0&3, 1&4, 2&5.
  */
-fun teamOf(seat: Seat): Int = seat.index % 2
+fun teamOf(seat: Seat, teamCount: Int): Int = seat.index % teamCount
 
 /** The next seat clockwise at a table of [playerCount]. */
 fun nextSeat(seat: Seat, playerCount: Int): Seat = Seat((seat.index + 1) % playerCount)
 
 /**
  * The other seats on [seat]'s team, in seat order: empty at 2 players, the opposite seat at 4, the
- * two same-parity seats at 6.
+ * two same-parity seats at 6 with two teams, or the opposite seat at 6 with three teams.
  */
-fun teammatesOf(seat: Seat, playerCount: Int): List<Seat> =
-    (0 until playerCount).map(::Seat).filter { it != seat && teamOf(it) == teamOf(seat) }
+fun teammatesOf(seat: Seat, playerCount: Int, teamCount: Int): List<Seat> =
+    (0 until playerCount).map(::Seat).filter { it != seat && teamOf(it, teamCount) == teamOf(seat, teamCount) }
 
 /** The winning bid and who made it. */
 data class Contract(val declarer: Seat, val bid: Bid) {
@@ -64,6 +65,7 @@ data class GameState(
     val handNumber: Int,
     val dealer: Seat,
     val phase: Phase,
+    val teamCount: Int = 2,
     val hands: Map<Seat, List<Card>>,
     val kitty: List<Card>,
     val bidding: BiddingState,
@@ -86,6 +88,7 @@ data class PlayerView(
     val seat: Seat,
     val phase: Phase,
     val playerCount: Int,
+    val teamCount: Int,
     val handNumber: Int,
     val hand: List<Card>,
     val handSizes: Map<Seat, Int>,
@@ -113,7 +116,7 @@ data class PlayerView(
     val lastHandResult: HandResult?,
     val winner: Int?,
 ) {
-    val myTeam: Int get() = teamOf(seat)
+    val myTeam: Int get() = teamOf(seat, teamCount)
     val isMyTurn: Boolean get() = toAct == seat
 }
 

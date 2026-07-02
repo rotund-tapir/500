@@ -47,8 +47,9 @@ private data class WalkthroughPage(val title: String, val body: String, val show
 private val walkthroughPages = listOf(
     WalkthroughPage(
         "Welcome to 500",
-        "500 is a trick-taking card game. You and the seat opposite you are a team (at 6 players, " +
-            "every second seat; at 2 players it's every player for themselves).\n\n" +
+        "500 is a trick-taking card game played in teams — in the standard four-player game you " +
+            "partner the seat opposite you. Six players form two teams of three or three teams " +
+            "of two, and two players go head to head.\n\n" +
             "Your team wins by being first to +500 points — but you can also LOSE by falling to " +
             "−500, so wild bidding has a price.",
     ),
@@ -194,9 +195,13 @@ fun RulesDialog(onDismiss: () -> Unit) {
                     "Players, teams and decks",
                     "• 4 players (standard): two teams of two, partners opposite. 43-card deck — " +
                         "A to 4 in the red suits, A to 5 in the black suits, plus one Joker.\n" +
-                        "• 6 players: two teams of three, alternating seats. 63-card deck — the " +
-                        "full 52 plus 11s and 12s of every suit, the red 13s, and the Joker. The " +
-                        "11/12/13 rank above the 10 and below the Jack.\n" +
+                        "• 6 players: 63-card deck — the full 52 plus 11s and 12s of every suit, " +
+                        "the red 13s, and the Joker. The 11/12/13 rank above the 10 and below the " +
+                        "Jack. Two team structures are offered: two teams of three (alternating " +
+                        "seats), or three teams of two with partners seated opposite. With three " +
+                        "teams each defending team scores its own tricks, only one teammate sits " +
+                        "out on a misère, and a team falling to −500 ends the game with the " +
+                        "best-scoring other team the winner.\n" +
                         "• 2 players: no partners. The 43-card deck is used; after both hands and " +
                         "the kitty are dealt the remaining 20 cards are out of play, face down.",
                 )
@@ -220,9 +225,10 @@ fun RulesDialog(onDismiss: () -> Unit) {
                     "",
                     "Misère (win no tricks, played at no trumps, worth 250) ranks between 8♠ and " +
                         "8♣, but may only be called once the bidding has reached seven tricks — " +
-                        "a bid of 7♠ or higher. Open Misère is the highest bid of all (500), " +
-                        "gated the same way: the declarer's hand is exposed to the other players " +
-                        "once play begins.\n\n" +
+                        "a bid of 7♠ or higher. Open Misère is the highest-RANKING bid — nothing " +
+                        "can outbid it — although at 500 points it is worth less than 10NT's 520; " +
+                        "it is gated the same way, and the declarer's hand is exposed to the other " +
+                        "players once play begins.\n\n" +
                         "On a Misère the declarer plays alone: their partner (both teammates at " +
                         "6 players) sits the hand out.",
                 )

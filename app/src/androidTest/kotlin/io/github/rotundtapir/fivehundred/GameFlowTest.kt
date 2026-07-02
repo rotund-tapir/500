@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -136,6 +137,8 @@ class GameFlowTest {
         rule.onNodeWithTag("settingsButton").performClick()
         // FOSS flavor: a donation link, never an ads purchase.
         rule.onNodeWithText("Support development").assertIsDisplayed()
+        // Feedback goes to the issue tracker (FOSS) / mailto (Play) — just assert it's offered.
+        rule.onNodeWithTag("feedbackButton").assertIsDisplayed()
         rule.onNodeWithTag("acknowledgments").performClick()
         // The card artist must be credited.
         waitForText("Byron Knoll", substring = true)
@@ -221,9 +224,13 @@ class GameFlowTest {
         rule.onNodeWithText("New Game").assertIsDisplayed()
     }
 
+    /** How many nodes currently show exactly [text] (e.g. counting "(partner)" markers). */
+    private fun textCount(text: String): Int =
+        rule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().size
+
     @Test
     fun twoPlayerGame_reachesBidding() {
-        rule.onNodeWithTag("players:2").performClick()
+        rule.onNodeWithTag("mode:2p").performClick()
         startGame()
         waitForBidPanel()
         assertEquals("2-player deal still gives the human 10 cards", 10, cardsOnScreen())
@@ -233,12 +240,27 @@ class GameFlowTest {
 
     @Test
     fun sixPlayerGame_reachesBidding() {
-        rule.onNodeWithTag("players:6").performClick()
+        rule.onNodeWithTag("mode:6p2t").performClick()
         startGame()
         waitForBidPanel()
-        // Seats 2 and 4 share the human's team, so the opponents row must mark a partner.
+        // Two teams of three: seats 2 and 4 share the human's team, so the opponents row must mark
+        // exactly two partners.
         rule.waitUntil(STEP_TIMEOUT_MS) { textExists("(partner)") }
+        assertEquals("two teams of three give the human two partners", 2, textCount("(partner)"))
         assertEquals("6-player deal still gives the human 10 cards", 10, cardsOnScreen())
+    }
+
+    @Test
+    fun threeTeamsGame_reachesBidding_withExactlyOnePartner() {
+        rule.onNodeWithTag("mode:6p3t").performClick()
+        startGame()
+        waitForBidPanel()
+        // Three teams of two, partners opposite: only seat 3 shares the human's team.
+        rule.waitUntil(STEP_TIMEOUT_MS) { textExists("(partner)") }
+        assertEquals("three teams of two give the human exactly one partner", 1, textCount("(partner)"))
+        assertEquals("6-player deal still gives the human 10 cards", 10, cardsOnScreen())
+        // The score bar lists all three teams: "Us" plus two opposing pairs joined with "&".
+        assertTrue("three-team score bar shows Us: 0", textExists("Us: 0", substring = true))
     }
 
     @Test

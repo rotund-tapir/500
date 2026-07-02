@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,23 @@ import androidx.compose.ui.unit.sp
 import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.fivehundred.AnimationSpeed
 
+/**
+ * A game mode the home screen offers: a table size plus its team structure. [players] and [teams]
+ * feed straight into `FiveHundredRules(playerCount, teamCount)`.
+ */
+enum class GameMode(
+    val players: Int,
+    val teams: Int,
+    val title: String,
+    val subtitle: String,
+    val tag: String,
+) {
+    TWO_PLAYER(players = 2, teams = 2, title = "2 players", subtitle = "head to head", tag = "mode:2p"),
+    FOUR_PLAYER(players = 4, teams = 2, title = "4 players", subtitle = "2 teams of 2", tag = "mode:4p"),
+    SIX_PLAYER_TWO_TEAMS(players = 6, teams = 2, title = "6 players", subtitle = "2 teams of 3", tag = "mode:6p2t"),
+    SIX_PLAYER_THREE_TEAMS(players = 6, teams = 3, title = "6 players", subtitle = "3 teams of 2", tag = "mode:6p3t"),
+}
+
 @Composable
 fun HomeScreen(
     monetization: Monetization,
@@ -51,8 +69,8 @@ fun HomeScreen(
     onSetMisereEnabled: (Boolean) -> Unit,
     noTrumpsEnabled: Boolean,
     onSetNoTrumpsEnabled: (Boolean) -> Unit,
-    playerCount: Int,
-    onPlayerCountChange: (Int) -> Unit,
+    mode: GameMode,
+    onModeChange: (GameMode) -> Unit,
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showWalkthrough by remember { mutableStateOf(false) }
@@ -92,13 +110,19 @@ fun HomeScreen(
                 Text("Australian rules · you vs the bots", fontSize = 16.sp)
                 Spacer(Modifier.height(24.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (count in intArrayOf(2, 4, 6)) {
-                        PlayerCountButton(
-                            count = count,
-                            selected = count == playerCount,
-                            onClick = { onPlayerCountChange(count) },
-                        )
+                // The four game modes, as a compact 2×2 grid of two-line buttons.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GameMode.entries.chunked(2).forEach { rowModes ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowModes.forEach { m ->
+                                GameModeButton(
+                                    mode = m,
+                                    selected = m == mode,
+                                    onClick = { onModeChange(m) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(24.dp))
@@ -145,12 +169,13 @@ fun HomeScreen(
     }
 }
 
-/** One option in the 2/4/6 player-count selector; the selected one gets filled emphasis. */
+/** One option in the game-mode selector: player count over its team structure; the selected one gets filled emphasis. */
 @Composable
-private fun PlayerCountButton(
-    count: Int,
+private fun GameModeButton(
+    mode: GameMode,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val onBackground = MaterialTheme.colorScheme.onBackground
     OutlinedButton(
@@ -167,11 +192,18 @@ private fun PlayerCountButton(
             if (selected) 2.dp else 1.dp,
             onBackground.copy(alpha = if (selected) 1f else 0.4f),
         ),
-        modifier = Modifier.testTag("players:$count"),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        modifier = modifier.testTag(mode.tag),
     ) {
-        Text(
-            "$count players",
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                mode.title,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            )
+            Text(
+                mode.subtitle,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }

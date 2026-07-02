@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.cardkit.ui.theme.CardkitTheme
+import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
 import io.github.rotundtapir.fivehundred.ui.HomeScreen
 import kotlinx.coroutines.launch
@@ -94,14 +95,16 @@ private fun FiveHundredApp(
     val setNoTrumpsEnabled: (Boolean) -> Unit = { value ->
         scope.launch { settings.setNoTrumpsEnabled(value) }
     }
-    var playerCount by rememberSaveable { mutableStateOf(4) }
+    // Stored by name so rememberSaveable needs no custom Saver.
+    var modeName by rememberSaveable { mutableStateOf(GameMode.FOUR_PLAYER.name) }
+    val mode = GameMode.valueOf(modeName)
 
     if (!inGame) {
         HomeScreen(
             monetization = monetization,
             activity = activity,
             onNewGame = {
-                vm.newGame(nextSeed(), playerCount, misereEnabled, noTrumpsEnabled)
+                vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
                 inGame = true
             },
             animationSpeed = animationSpeed,
@@ -112,8 +115,8 @@ private fun FiveHundredApp(
             onSetMisereEnabled = setMisereEnabled,
             noTrumpsEnabled = noTrumpsEnabled,
             onSetNoTrumpsEnabled = setNoTrumpsEnabled,
-            playerCount = playerCount,
-            onPlayerCountChange = { playerCount = it },
+            mode = mode,
+            onModeChange = { modeName = it.name },
         )
     } else {
         val current = view
@@ -121,7 +124,7 @@ private fun FiveHundredApp(
             HomeScreen(
                 monetization = monetization,
                 activity = activity,
-                onNewGame = { vm.newGame(nextSeed(), playerCount, misereEnabled, noTrumpsEnabled) },
+                onNewGame = { vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams) },
                 animationSpeed = animationSpeed,
                 onCycleAnimationSpeed = cycleAnimationSpeed,
                 sortByDefault = sortByDefault,
@@ -130,8 +133,8 @@ private fun FiveHundredApp(
                 onSetMisereEnabled = setMisereEnabled,
                 noTrumpsEnabled = noTrumpsEnabled,
                 onSetNoTrumpsEnabled = setNoTrumpsEnabled,
-                playerCount = playerCount,
-                onPlayerCountChange = { playerCount = it },
+                mode = mode,
+                onModeChange = { modeName = it.name },
             )
         } else {
             GameScreen(

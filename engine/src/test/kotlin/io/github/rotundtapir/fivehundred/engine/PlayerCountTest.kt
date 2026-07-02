@@ -32,24 +32,24 @@ class PlayerCountTest {
     fun `teamOf puts even seats on team 0 and odd seats on team 1 at every count`() {
         for (count in listOf(2, 4, 6)) {
             for (i in 0 until count) {
-                assertEquals(i % 2, teamOf(Seat(i)))
+                assertEquals(i % 2, teamOf(Seat(i), 2))
             }
         }
     }
 
     @Test
     fun `teammatesOf is empty at 2, the opposite seat at 4, two seats at 6`() {
-        assertEquals(emptyList(), teammatesOf(Seat(0), 2))
-        assertEquals(emptyList(), teammatesOf(Seat(1), 2))
+        assertEquals(emptyList(), teammatesOf(Seat(0), 2, 2))
+        assertEquals(emptyList(), teammatesOf(Seat(1), 2, 2))
 
-        assertEquals(listOf(Seat(2)), teammatesOf(Seat(0), 4))
-        assertEquals(listOf(Seat(3)), teammatesOf(Seat(1), 4))
-        assertEquals(listOf(Seat(0)), teammatesOf(Seat(2), 4))
-        assertEquals(listOf(Seat(1)), teammatesOf(Seat(3), 4))
+        assertEquals(listOf(Seat(2)), teammatesOf(Seat(0), 4, 2))
+        assertEquals(listOf(Seat(3)), teammatesOf(Seat(1), 4, 2))
+        assertEquals(listOf(Seat(0)), teammatesOf(Seat(2), 4, 2))
+        assertEquals(listOf(Seat(1)), teammatesOf(Seat(3), 4, 2))
 
-        assertEquals(listOf(Seat(2), Seat(4)), teammatesOf(Seat(0), 6))
-        assertEquals(listOf(Seat(1), Seat(5)), teammatesOf(Seat(3), 6))
-        assertEquals(listOf(Seat(1), Seat(3)), teammatesOf(Seat(5), 6))
+        assertEquals(listOf(Seat(2), Seat(4)), teammatesOf(Seat(0), 6, 2))
+        assertEquals(listOf(Seat(1), Seat(5)), teammatesOf(Seat(3), 6, 2))
+        assertEquals(listOf(Seat(1), Seat(3)), teammatesOf(Seat(5), 6, 2))
     }
 
     @Test
@@ -121,7 +121,7 @@ class PlayerCountTest {
             s = rules.apply(s, rules.currentActor(s)!!, Action.PlaceBid(Bid.Pass))
             s = rules.apply(s, declarer, Action.ExchangeKitty(s.hands[declarer]!!.take(KITTY_SIZE)))
 
-            val expectedOut = teammatesOf(declarer, count)
+            val expectedOut = teammatesOf(declarer, count, 2)
             assertEquals(count - expectedOut.size, s.activeSeats.size, "at $count players")
             assertTrue(expectedOut.none { it in s.activeSeats }, "teammates must sit out at $count players")
             assertEquals(s.activeSeats.toSet(), s.tricksWon.keys)

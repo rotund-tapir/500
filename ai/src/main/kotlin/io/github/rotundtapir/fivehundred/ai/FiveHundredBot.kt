@@ -31,7 +31,8 @@ import kotlin.random.Random
  *    most dangerous high cards for a Misère.
  *  - **Play** wins tricks as cheaply as possible, lets a winning teammate be, dumps low otherwise,
  *    and (as the Misère declarer) plays to avoid taking tricks. Teammates come from the view's
- *    [PlayerView.playerCount], so the same bot plays 2-, 4- and 6-handed games.
+ *    [PlayerView.playerCount] and [PlayerView.teamCount], so the same bot plays 2-, 4- and 6-handed
+ *    games in any team structure.
  */
 class FiveHundredBot(
     private val schedule: ScoreSchedule = ScoreSchedule.Avondale,
@@ -133,8 +134,8 @@ class FiveHundredBot(
         if (leading) return legal.maxBy { rawStrength(it, eval) } // lead a strong card
 
         val best = trick.maxBy { eval.strength(it.card, ledSuit) }
-        // No teammates at 2 players, one at 4, two at 6.
-        val teammateWinning = best.seat in teammatesOf(view.seat, view.playerCount)
+        // No teammates at 2 players, one at 4, one or two at 6 depending on the team structure.
+        val teammateWinning = best.seat in teammatesOf(view.seat, view.playerCount, view.teamCount)
         val bestStrength = eval.strength(best.card, ledSuit)
         val winners = legal.filter { eval.strength(it, ledSuit) > bestStrength }
 

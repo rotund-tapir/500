@@ -70,6 +70,17 @@ import io.github.rotundtapir.fivehundred.engine.teamOf
 private fun seatLabel(view: PlayerView, botNames: Map<Seat, String>, seat: Seat): String =
     if (seat == view.seat) "You" else botNames[seat] ?: "Seat ${seat.index}"
 
+/** The seats on [team], in seat order. */
+private fun teamSeats(view: PlayerView, team: Int): List<Seat> =
+    (0 until view.playerCount).map(::Seat).filter { teamOf(it, view.teamCount) == team }
+
+/**
+ * A short name for another team, built from its members ("Gus & Ivy") — used where "Them" is
+ * ambiguous, i.e. whenever there is more than one opposing team.
+ */
+private fun teamLabel(view: PlayerView, botNames: Map<Seat, String>, team: Int): String =
+    teamSeats(view, team).joinToString(" & ") { seatLabel(view, botNames, it) }
+
 /** Hand order for display: trumps (both bowers + Joker) first, then alternating-colour suits, strongest first. */
 private fun sortedForDisplay(hand: List<Card>, trump: Trump?): List<Card> {
     val eval = TrickEvaluator(trump ?: Trump.NO_TRUMP)
@@ -129,7 +140,7 @@ fun GameScreen(
                     .safeDrawingPadding()
                     .padding(horizontal = 12.dp),
             ) {
-                ScoreBar(view, onExit)
+                ScoreBar(view, botNames, onExit)
                 ContractLine(view, botNames)
                 Spacer(Modifier.height(12.dp))
                 OpponentsRow(view, botNames, dealState)
@@ -168,11 +179,20 @@ fun GameScreen(
     }
 
     view.winner?.let { winningTeam ->
-        val youWon = winningTeam == teamOf(view.seat)
+        val youWon = winningTeam == view.myTeam
+        val finalScore = if (view.teamCount == 2) {
+            "Final score — you ${view.scores[view.myTeam]}, opponents ${view.scores[1 - view.myTeam]}"
+        } else {
+            // Three teams: list every team's score, ours first, the others named by their members.
+            val others = (0 until view.teamCount).filter { it != view.myTeam }
+            val parts = listOf("You ${view.scores[view.myTeam] ?: 0}") +
+                others.map { team -> "${teamLabel(view, botNames, team)} ${view.scores[team] ?: 0}" }
+            "Final score — ${parts.joinToString(" · ")}"
+        }
         AlertDialog(
             onDismissRequest = {},
             title = { Text(if (youWon) "You win!" else "You lose") },
-            text = { Text("Final score — you ${view.scores[teamOf(view.seat)]}, opponents ${view.scores[1 - teamOf(view.seat)]}") },
+            text = { Text(finalScore) },
             confirmButton = { TextButton(onClick = onExit) { Text("Back to menu") } },
         )
     }
@@ -237,11 +257,11 @@ private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
     if (dismissed) return
 
     val contract = result.contract
-    val declarerTeam = teamOf(contract.declarer)
-    val myTeam = teamOf(view.seat)
+    val declarerTeam = teamOf(contract.declarer, view.teamCount)
+    val myTeam = view.myTeam
     val myDelta = result.teamDeltas[myTeam] ?: 0
-    val theirDelta = result.teamDeltas[1 - myTeam] ?: 0
-    val defenderTricks = 10 - result.declarerTricks
+    // Our team first, then every other team in index order (just "Them" with two teams).
+    val teamsInOrder = listOf(myTeam) + (0 until view.teamCount).filter { it != myTeam }
 
     val bidLine = buildString {
         append("${seatLabel(view, botNames, contract.declarer)} bid ${contract.bid.label}")
@@ -253,10 +273,20 @@ private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
         "Declarer's side took ${result.declarerTricks} of 10 tricks"
     }
 
-    fun explanation(team: Int): String = when {
-        team == declarerTeam -> if (result.made) "contract made" else "contract failed"
-        contract.isMisere -> "defenders don't score"
-        else -> "$defenderTricks ${if (defenderTricks == 1) "trick" else "tricks"} × 10"
+    fun rowLabel(team: Int): String = when {
+        team == myTeam -> "Us"
+        view.teamCount == 2 -> "Them"
+        else -> teamLabel(view, botNames, team)
+    }
+
+    fun explanation(team: Int): String {
+        // A defending team's delta is exactly 10 × the tricks its own members took.
+        val teamTricks = (result.teamDeltas[team] ?: 0) / 10
+        return when {
+            team == declarerTeam -> if (result.made) "contract made" else "contract failed"
+            contract.isMisere -> "defenders don't score"
+            else -> "$teamTricks ${if (teamTricks == 1) "trick" else "tricks"} × 10"
+        }
     }
 
     // Header tint follows the human's fortunes, not the declarer's: green-ish when our side gained
@@ -293,8 +323,9 @@ private fun HandResultDialog(view: PlayerView, botNames: Map<Seat, String>) {
                     Text(bidLine, style = MaterialTheme.typography.bodyMedium)
                     Text(tricksLine, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(4.dp))
-                    ScoreDeltaRow("Us", myDelta, explanation(myTeam))
-                    ScoreDeltaRow("Them", theirDelta, explanation(1 - myTeam))
+                    teamsInOrder.forEach { team ->
+                        ScoreDeltaRow(rowLabel(team), result.teamDeltas[team] ?: 0, explanation(team))
+                    }
                     Spacer(Modifier.height(4.dp))
                     Button(
                         onClick = { dismissed = true },
@@ -327,15 +358,29 @@ private fun ScoreDeltaRow(label: String, delta: Int, explanation: String) {
 }
 
 @Composable
-private fun ScoreBar(view: PlayerView, onExit: () -> Unit) {
-    val myTeam = teamOf(view.seat)
+private fun ScoreBar(view: PlayerView, botNames: Map<Seat, String>, onExit: () -> Unit) {
+    val myTeam = view.myTeam
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Us: ${view.scores[myTeam] ?: 0}", fontWeight = FontWeight.Bold)
-        Text("Them: ${view.scores[1 - myTeam] ?: 0}", fontWeight = FontWeight.Bold)
+        if (view.teamCount == 2) {
+            Text("Us: ${view.scores[myTeam] ?: 0}", fontWeight = FontWeight.Bold)
+            Text("Them: ${view.scores[1 - myTeam] ?: 0}", fontWeight = FontWeight.Bold)
+        } else {
+            // Three teams: name each opposing team by its members. The line is long, so use small
+            // typography and let it wrap onto a second line rather than truncate.
+            val others = (0 until view.teamCount).filter { it != myTeam }
+            val entries = listOf("Us: ${view.scores[myTeam] ?: 0}") +
+                others.map { team -> "${teamLabel(view, botNames, team)}: ${view.scores[team] ?: 0}" }
+            Text(
+                entries.joinToString("   "),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+        }
         TextButton(
             onClick = onExit,
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
@@ -396,7 +441,7 @@ private fun OpponentStatus(
             style = textStyle,
             fontWeight = if (view.toAct == seat) FontWeight.Bold else FontWeight.Normal,
         )
-        if (teamOf(seat) == teamOf(view.seat)) {
+        if (teamOf(seat, view.teamCount) == view.myTeam) {
             Text("(partner)", style = MaterialTheme.typography.labelSmall)
         }
         if (active) {

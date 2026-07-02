@@ -63,6 +63,7 @@ class GameViewModel : ViewModel() {
         playerCount: Int = 4,
         misereEnabled: Boolean = true,
         noTrumpsEnabled: Boolean = true,
+        teamCount: Int = 2,
     ) {
         gameJob?.cancel()
         state.value = null
@@ -70,6 +71,7 @@ class GameViewModel : ViewModel() {
             playerCount = playerCount,
             misereEnabled = misereEnabled,
             noTrumpsEnabled = noTrumpsEnabled,
+            teamCount = teamCount,
         )
         val gameRules = rules
         val names = BOT_NAMES.shuffled(Random(seed))
@@ -108,11 +110,11 @@ class GameViewModel : ViewModel() {
         AnimationSpeed.OFF -> 0L
     }
 
-    /** Hold before the first bid of a hand — matches GameScreen's dealing-animation duration. */
+    /** Hold before the first bid of a hand — covers GameScreen's shuffle + deal animation. */
     private fun dealPauseMillis(speed: AnimationSpeed): Long = when (speed) {
-        AnimationSpeed.SLOW -> 5200L
-        AnimationSpeed.NORMAL -> 3500L
-        AnimationSpeed.FAST -> 1600L
+        AnimationSpeed.SLOW -> 6800L
+        AnimationSpeed.NORMAL -> 4400L
+        AnimationSpeed.FAST -> 2000L
         AnimationSpeed.OFF -> 0L
     }
 

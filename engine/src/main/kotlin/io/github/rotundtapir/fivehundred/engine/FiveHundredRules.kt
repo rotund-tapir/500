@@ -16,8 +16,10 @@ import kotlin.random.Random
  *
  * Per-count variations (everything else — bidding, kitty, scoring — is identical):
  *  - **4 players** (the standard game): 43-card deck; on a Misère the declarer's partner sits out.
- *  - **6 players**: 63-card deck (full 52 + the 11s and 12s + the red 13s + Joker), two teams of
- *    three; on a Misère both of the declarer's teammates sit out.
+ *  - **6 players**: 63-card deck (full 52 + the 11s and 12s + the red 13s + Joker); either two teams
+ *    of three (alternating seats) or, with [teamCount] = 3, three teams of two with partners seated
+ *    opposite (0&3, 1&4, 2&5). On a Misère all of the declarer's teammates sit out — both of them in
+ *    two teams of three, exactly one in three teams of two.
  *  - **2 players**: 43-card deck; each player is their own team; after dealing 10 each + the 3-card
  *    kitty, the remaining 20 cards are dead — dropped from the state entirely, never revealed or
  *    played. A Misère has nobody to sit out.
@@ -27,10 +29,15 @@ class FiveHundredRules(
     val playerCount: Int = 4,
     val misereEnabled: Boolean = true,
     val noTrumpsEnabled: Boolean = true,
+    val teamCount: Int = 2,
 ) : GameRules<GameState, Action, PlayerView> {
 
     init {
         require(playerCount in setOf(2, 4, 6)) { "500 is played by 2, 4 or 6 players, not $playerCount" }
+        require(teamCount == 2 || (teamCount == 3 && playerCount == 6)) {
+            "500 supports 2 teams at any player count, or 3 teams only at 6 players " +
+                "(got $teamCount teams with $playerCount players)"
+        }
     }
 
     /**
@@ -77,7 +84,13 @@ class FiveHundredRules(
 
     /** Starts a fresh match: deals the first hand and opens the auction. */
     fun newGame(seed: Long, firstDealer: Seat = Seat(0)): GameState =
-        dealHand(seed = seed, dealer = firstDealer, handNumber = 1, scores = mapOf(0 to 0, 1 to 0), lastResult = null)
+        dealHand(
+            seed = seed,
+            dealer = firstDealer,
+            handNumber = 1,
+            scores = (0 until teamCount).associateWith { 0 },
+            lastResult = null,
+        )
 
     private fun dealHand(
         seed: Long,
@@ -98,6 +111,7 @@ class FiveHundredRules(
             handNumber = handNumber,
             dealer = dealer,
             phase = Phase.BIDDING,
+            teamCount = teamCount,
             hands = hands,
             kitty = dealt.leftover.take(KITTY_SIZE),
             bidding = BiddingState(toAct = opener),
@@ -154,6 +168,7 @@ class FiveHundredRules(
             seat = seat,
             phase = state.phase,
             playerCount = state.hands.size,
+            teamCount = state.teamCount,
             handNumber = state.handNumber,
             hand = state.hands[seat].orEmpty(),
             handSizes = state.hands.mapValues { it.value.size },
@@ -260,9 +275,9 @@ class FiveHundredRules(
         val newHand = hand.toMutableList().apply { action.discards.forEach { remove(it) } }
         val hands = state.hands.toMutableMap().apply { put(seat, newHand) }
 
-        // Misère: the declarer's teammates (partner at 4 players, both teammates at 6, nobody at 2)
-        // sit out for the hand.
-        val sittingOut = if (contract.isMisere) teammatesOf(contract.declarer, playerCount) else emptyList()
+        // Misère: the declarer's teammates (partner at 4 players, all teammates at 6 — both in two
+        // teams of three, exactly one in three teams of two — nobody at 2) sit out for the hand.
+        val sittingOut = if (contract.isMisere) teammatesOf(contract.declarer, playerCount, teamCount) else emptyList()
         val active = allSeats.filter { it !in sittingOut }
         return state.copy(
             phase = Phase.PLAY,
@@ -339,9 +354,9 @@ class FiveHundredRules(
 
     private fun completeHand(state: GameState): GameState {
         val contract = state.contract!!
-        val result = scoreHand(contract, state.tricksWon, schedule)
+        val result = scoreHand(contract, state.tricksWon, schedule, teamCount)
         val newScores = state.scores.mapValues { (team, s) -> s + (result.teamDeltas[team] ?: 0) }
-        val matchWinner = determineWinner(newScores, result)
+        val matchWinner = determineWinner(newScores, result, teamCount)
 
         return if (matchWinner != null) {
             state.copy(phase = Phase.COMPLETE, scores = newScores, lastHandResult = result, winner = matchWinner)
