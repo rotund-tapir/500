@@ -81,7 +81,7 @@ import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.cardkit.ui.displayLabel
 import kotlin.math.roundToInt
 import io.github.rotundtapir.fivehundred.AnimationSpeed
-import io.github.rotundtapir.fivehundred.SoundEffect
+import io.github.rotundtapir.cardkit.ui.SoundEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import io.github.rotundtapir.fivehundred.engine.Bid

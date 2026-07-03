@@ -45,7 +45,7 @@ import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.ui.CardBack
 import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.fivehundred.AnimationSpeed
-import io.github.rotundtapir.fivehundred.SoundEffect
+import io.github.rotundtapir.cardkit.ui.SoundEffect
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
