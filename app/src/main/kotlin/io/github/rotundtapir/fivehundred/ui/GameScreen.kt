@@ -4,6 +4,7 @@ package io.github.rotundtapir.fivehundred.ui
 import android.app.Activity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -76,12 +77,14 @@ import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.cardkit.ui.displayLabel
 import kotlin.math.roundToInt
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.SoundEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.engine.KITTY_SIZE
 import io.github.rotundtapir.fivehundred.engine.Phase
 import io.github.rotundtapir.fivehundred.engine.PlayerView
+import io.github.rotundtapir.fivehundred.engine.ScoreSchedule
 import io.github.rotundtapir.fivehundred.engine.TrickEvaluator
 import io.github.rotundtapir.fivehundred.engine.TrickPlay
 import io.github.rotundtapir.fivehundred.engine.Trump
@@ -134,6 +137,7 @@ fun GameScreen(
     holdTricks: Boolean = false,
     onToggleHoldTricks: () -> Unit = {},
     onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
+    soundHook: ((SoundEffect) -> Unit)? = null,
 ) {
     var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
     // Set once the tutorial's scripted hand has been scored and its result dialog dismissed.
@@ -148,6 +152,7 @@ fun GameScreen(
     // mid-deal. Tests run at OFF, where this is skipped entirely (dealState.stage stays DONE).
     // lastAnimatedHand is saveable so recreation doesn't replay the deal.
     val dealState = remember { DealAnimationState() }
+    dealState.soundHook = soundHook
     // Screen rects of the tutorial's interaction targets (bid button, cards, felt), for the bubble.
     val tutorialTargets = if (tutorial != null) remember { mutableStateMapOf<String, Rect>() } else null
     var lastAnimatedHand by rememberSaveable { mutableStateOf(0) }
@@ -195,6 +200,9 @@ fun GameScreen(
                         .weight(1f)
                         .tutorialTarget(tutorialTargets, "trick"),
                     holdTricks = holdTricks,
+                    // The tutorial always holds completed tricks so the bubble can explain each
+                    // outcome (still inert at OFF, like all pacing).
+                    forceHold = tutorial != null,
                     onToggleHoldTricks = onToggleHoldTricks,
                     onTrickAcknowledged = onTrickAcknowledged,
                 )
@@ -216,6 +224,7 @@ fun GameScreen(
                         onPlay = onPlay,
                         tutorial = tutorial,
                         targets = tutorialTargets,
+                        peekDiscardHand = tutorial != null && animationSpeed != AnimationSpeed.OFF,
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -224,7 +233,7 @@ fun GameScreen(
             // The one card back currently in flight from the deck to a pile, drawn above everything.
             FlyingDealCard(dealState)
             if (tutorial != null && tutorialTargets != null && !dealState.dealing) {
-                TutorialBubble(tutorial, view, tutorialTargets, dealState.overlayOrigin)
+                TutorialBubble(tutorial, view, botNames, tutorialTargets, dealState.overlayOrigin)
             }
         }
     }
@@ -290,9 +299,25 @@ fun GameScreen(
     }
 }
 
-/** Records this composable's window bounds under [key] for the tutorial bubble to anchor to. */
-private fun Modifier.tutorialTarget(map: MutableMap<String, Rect>?, key: String): Modifier =
-    if (map == null) this else onGloballyPositioned { map[key] = it.boundsInRoot() }
+/**
+ * Records this composable's window bounds under [key] for the tutorial bubble to anchor to.
+ * [widthFraction] narrows the recorded rect to the left fraction of the bounds — for cards in the
+ * overlapping fan, where only the left strip of each card is actually visible, so the bubble's tail
+ * points at what the player can see rather than at the covered remainder.
+ */
+private fun Modifier.tutorialTarget(
+    map: MutableMap<String, Rect>?,
+    key: String,
+    widthFraction: Float = 1f,
+): Modifier =
+    if (map == null) this else onGloballyPositioned { coords ->
+        val bounds = coords.boundsInRoot()
+        map[key] = if (widthFraction >= 1f) {
+            bounds
+        } else {
+            Rect(bounds.left, bounds.top, bounds.left + bounds.width * widthFraction, bounds.bottom)
+        }
+    }
 
 /** Clickable only while [enabled] — written as a factory to avoid conditional `.then` chains. */
 private fun Modifier.tappableWhen(enabled: Boolean, onTap: () -> Unit): Modifier =
@@ -307,6 +332,7 @@ private fun Modifier.tappableWhen(enabled: Boolean, onTap: () -> Unit): Modifier
 private fun TutorialBubble(
     tutorial: TutorialScriptState,
     view: PlayerView,
+    botNames: Map<Seat, String>,
     targets: Map<String, Rect>,
     overlayOrigin: Offset,
 ) {
@@ -317,9 +343,17 @@ private fun TutorialBubble(
         is TutorialStep.PlayStep -> view.phase == Phase.PLAY && view.isMyTurn
         null -> false
     }
+    // A completed trick held on the felt (the tutorial forces the hold on): explain what happened.
+    // Mirrors TrickArea's holdingTrick — after a completed trick, view.trickNumber IS that trick's
+    // number (it advanced when the trick closed), so it keys tutorialTrickNotes directly.
+    val lastTrick = view.lastTrick
+    val trickHeld = view.phase == Phase.PLAY && view.currentTrick.isEmpty() &&
+        lastTrick != null && !view.isMyTurn
     val text = when {
         step == null -> "That's the whole hand — see how it scored."
         isHumanDecision -> step.advice
+        trickHeld -> tutorialTrickNotes[view.trickNumber]
+            ?: "${seatLabel(view, botNames, lastTrick!!.winner)} won the trick — tap it to continue."
         else -> "Watch the table — the other players are acting…"
     }
     val targetKey = when {
@@ -476,7 +510,12 @@ private fun HandResultDialog(
     fun explanation(team: Int): String {
         // A defending team's delta is exactly 10 × the tricks its own members took.
         val teamTricks = (result.teamDeltas[team] ?: 0) / 10
+        // Taking all 10 tricks is a slam, scored at max(contract value, 250) — call out the floor
+        // when it actually lifted the award above the contract's face value (e.g. 7♦'s 180 → 250).
+        val slamFloorApplied = result.made && result.declarerTricks == 10 &&
+            (result.teamDeltas[declarerTeam] ?: 0) > ScoreSchedule.Avondale.value(contract.bid)
         return when {
+            team == declarerTeam && slamFloorApplied -> "slam — all 10 tricks scores at least 250"
             team == declarerTeam -> if (result.made) "contract made" else "contract failed"
             contract.isMisere -> "defenders don't score"
             else -> "$teamTricks ${if (teamTricks == 1) "trick" else "tricks"} × 10"
@@ -713,12 +752,15 @@ private fun TrickArea(
     dealState: DealAnimationState,
     modifier: Modifier = Modifier,
     holdTricks: Boolean = false,
+    // Forces the hold on regardless of the toggle — the tutorial uses this so every completed
+    // trick waits to be explained. The toggle button is hidden while forced.
+    forceHold: Boolean = false,
     onToggleHoldTricks: () -> Unit = {},
     onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
 ) {
     // With "Hold tricks" on, a completed trick stays on the felt until the player taps it away —
     // time to memorise the cards for counting. Toggleable mid-hand for the tricks that matter.
-    val holdingTrick = holdTricks &&
+    val holdingTrick = (holdTricks || forceHold) &&
         animationSpeed != AnimationSpeed.OFF &&
         !dealState.dealing &&
         view.phase == Phase.PLAY &&
@@ -735,8 +777,11 @@ private fun TrickArea(
         contentAlignment = Alignment.Center,
     ) {
         // Visible for the whole hand so the player can hold exactly the tricks they care about
-        // (hidden at OFF, where no pacing — including the hold — applies).
-        if (view.phase == Phase.PLAY && !dealState.dealing && animationSpeed != AnimationSpeed.OFF) {
+        // (hidden at OFF, where no pacing — including the hold — applies, and while the tutorial
+        // forces the hold on: the bubble's notes drive the pacing there, not the toggle).
+        if (view.phase == Phase.PLAY && !dealState.dealing &&
+            animationSpeed != AnimationSpeed.OFF && !forceHold
+        ) {
             OutlinedButton(
                 onClick = onToggleHoldTricks,
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -846,6 +891,8 @@ private fun ActionArea(
     onPlay: (Card) -> Unit,
     tutorial: TutorialScriptState? = null,
     targets: MutableMap<String, Rect>? = null,
+    // Tutorial: peek-scroll the hand on the kitty-exchange step so the off-screen cards are seen.
+    peekDiscardHand: Boolean = false,
 ) {
     // In the tutorial only the scripted action is enabled, and taking it advances the script.
     val step = tutorial?.step
@@ -898,6 +945,7 @@ private fun ActionArea(
                         (step as? TutorialStep.DiscardStep)?.cards?.toSet() ?: emptySet()
                     },
                     targets = targets,
+                    peekOnAppear = peekDiscardHand,
                 )
             }
             view.phase == Phase.PLAY && view.isMyTurn -> {
@@ -975,6 +1023,7 @@ private fun DiscardPanel(
     // only once exactly they are selected.
     requiredDiscards: Set<Card>? = null,
     targets: MutableMap<String, Rect>? = null,
+    peekOnAppear: Boolean = false,
 ) {
     var selected by remember(view.hand) { mutableStateOf(emptySet<Card>()) }
     // Guard against double taps: one discard per PlayerView.
@@ -1009,8 +1058,12 @@ private fun DiscardPanel(
             selected = if (card in selected) selected - card
             else if (selected.size < KITTY_SIZE) selected + card else selected
         },
+        peekOnAppear = peekOnAppear,
     )
 }
+
+/** Fan overlap: each card advances this fraction of a card width, so only that strip is visible. */
+private const val HAND_OVERLAP = 0.45f
 
 @Composable
 private fun HumanHand(
@@ -1022,6 +1075,9 @@ private fun HumanHand(
     dimUnplayable: Boolean = true,
     selected: Set<Card> = emptySet(),
     targets: MutableMap<String, Rect>? = null,
+    // One slow scroll to the fan's end and back when the hand first appears — shows the player the
+    // full extent of a fan wider than the screen (the tutorial's kitty-exchange step uses this).
+    peekOnAppear: Boolean = false,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         OutlinedButton(
@@ -1040,24 +1096,44 @@ private fun HumanHand(
             )
         }
         val hand = if (sortHand) sortedForDisplay(view.hand, view.trump) else view.hand
+        // Every card except the fan's last is mostly covered by its right neighbour: only the left
+        // HAND_OVERLAP strip shows, so that's the rect the tutorial tail should point at.
+        val lastCard = hand.lastOrNull()
         // The fan is wider than the screen at this card size — scroll it horizontally.
+        val scrollState = rememberScrollState()
+        if (peekOnAppear) {
+            LaunchedEffect(Unit) {
+                // Wait for the first layout so the scroll range is known (maxValue starts at
+                // Int.MAX_VALUE); if the whole fan fits on screen there is nothing to show.
+                val end = snapshotFlow { scrollState.maxValue }.first { it != Int.MAX_VALUE }
+                if (end > 0) {
+                    scrollState.animateScrollTo(end, tween(durationMillis = 1200))
+                    delay(400)
+                    scrollState.animateScrollTo(0, tween(durationMillis = 1200))
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .horizontalScroll(scrollState)
                 .tutorialTarget(targets, "hand"),
             contentAlignment = Alignment.Center,
         ) {
             CardHand(
                 cards = hand,
                 cardWidth = 84.dp,
-                overlap = 0.45f,
+                overlap = HAND_OVERLAP,
                 playable = playable,
                 dimUnplayable = dimUnplayable,
                 selected = selected,
                 onCardClick = onClick,
                 cardModifier = { card ->
-                    Modifier.tutorialTarget(targets, "card:${card.displayLabel}")
+                    Modifier.tutorialTarget(
+                        targets,
+                        "card:${card.displayLabel}",
+                        widthFraction = if (card == lastCard) 1f else HAND_OVERLAP,
+                    )
                 },
             )
         }

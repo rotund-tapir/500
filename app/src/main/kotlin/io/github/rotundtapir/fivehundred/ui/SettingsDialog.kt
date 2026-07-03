@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +38,8 @@ fun SettingsDialog(
     onCycleAnimationSpeed: () -> Unit,
     sortByDefault: Boolean,
     onSetSortByDefault: (Boolean) -> Unit,
+    soundVolume: Float,
+    onSetSoundVolume: (Float) -> Unit,
     misereEnabled: Boolean,
     onSetMisereEnabled: (Boolean) -> Unit,
     noTrumpsEnabled: Boolean,
@@ -82,6 +85,19 @@ fun SettingsDialog(
                         checked = sortByDefault,
                         onCheckedChange = onSetSortByDefault,
                         modifier = Modifier.testTag("sortDefault"),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Sound volume")
+                    Slider(
+                        value = soundVolume,
+                        onValueChange = onSetSoundVolume,
+                        valueRange = 0f..1f,
+                        modifier = Modifier.weight(1f).testTag("volumeSlider"),
                     )
                 }
 
@@ -168,6 +184,10 @@ private fun AcknowledgmentsDialog(onDismiss: () -> Unit) {
                 Text(
                     "The 11, 12 and 13 card faces and the card back were created for this app " +
                         "in the same style and are dedicated to the public domain (CC0).",
+                )
+                Text(
+                    "Sound effects from Kenney's Casino Audio pack (kenney.nl), " +
+                        "public domain (CC0).",
                 )
                 TextButton(onClick = { uriHandler.openUri(CARD_ART_URL) }) {
                     Text("View Byron Knoll's card set")

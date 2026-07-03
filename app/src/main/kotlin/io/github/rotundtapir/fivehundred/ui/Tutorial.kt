@@ -103,7 +103,8 @@ val tutorialSteps: List<TutorialStep> = listOf(
         ),
         advice = "Winning the auction gave you the kitty: Q♣, 8♣ and K♥. Keep every trump and " +
             "your high cards — throw the three weakest odd cards, the 5♣, 7♦ and 8♣. " +
-            "Short side suits let you trump those suits sooner.",
+            "Short side suits let you trump those suits sooner. " +
+            "Swipe the hand sideways if a card is out of view.",
     ),
     TutorialStep.PlayStep(
         card = Joker,
@@ -162,6 +163,31 @@ val tutorialSteps: List<TutorialStep> = listOf(
         advice = "Finish with the A♥ — the highest heart left. Eight tricks in all: contract " +
             "made with one to spare.",
     ),
+)
+
+/**
+ * Shown while a completed trick is held on the felt during the tutorial (the hold is forced on for
+ * the whole tutorial hand, so nothing rushes past), keyed by trick number 1–10. Each note explains
+ * the outcome of that trick, grounded in the trace documented at the top of this file — do not edit
+ * one without the other. In practice only the bot-won tricks (3–6) are ever held: when the human
+ * wins a trick it is immediately the human's lead, so no hold applies — the rest are safety notes.
+ */
+val tutorialTrickNotes: Map<Int, String> = mapOf(
+    1 to "Your Joker couldn't lose — and it pulled a trump out of every other hand.",
+    2 to "The right bower wins: even Olive's A♠ fell to your J♠.",
+    3 to "There it is — Olive's J♣ is the LEFT BOWER, a spade in disguise, and it beat your K♠. " +
+        "That was the last trump out against you. Tap the trick to continue.",
+    4 to "Olive led the Q♦ and it held — everyone had to follow suit, and your forced J♦ ranks " +
+        "below her Queen. In diamonds a Jack is just a Jack: only the black ones are bowers " +
+        "this hand. Tap the trick to continue.",
+    5 to "Your partner Mabel's K♣ took the trick — and a partner's tricks count towards your " +
+        "contract too, so nothing is lost. Tap the trick to continue.",
+    6 to "Mabel's A♣ won the trick. You had no clubs, but you threw the Q♥ rather than waste a " +
+        "trump on your partner's certain winner. Tap the trick to continue.",
+    7 to "Your K♥ topped Mabel's J♥ — the trick stayed on your side either way.",
+    8 to "No trumps are left outside your hand, so the 10♠ walked it.",
+    9 to "The 9♠ was just as unbeatable — that's the seventh trick: contract secured.",
+    10 to "The A♥ took the last trick — eight in all, 7♠ made with a trick to spare.",
 )
 
 /**

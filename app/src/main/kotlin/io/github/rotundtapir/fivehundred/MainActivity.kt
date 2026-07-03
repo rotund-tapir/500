@@ -34,6 +34,9 @@ class MainActivity : ComponentActivity() {
          * instrumentation tests to run without bot delays.
          */
         const val EXTRA_ANIMATION_SPEED = "io.github.rotundtapir.fivehundred.ANIMATION_SPEED"
+
+        /** Intent extra (Float) overriding the persisted sound volume — tests pass 0f. */
+        const val EXTRA_SOUND_VOLUME = "io.github.rotundtapir.fivehundred.SOUND_VOLUME"
     }
 
     private lateinit var monetization: Monetization
@@ -43,6 +46,10 @@ class MainActivity : ComponentActivity() {
         else System.currentTimeMillis()
 
     /** The animation speed forced by the launching intent, or null to use the persisted setting. */
+    /** The sound volume forced by the launching intent, or null to use the persisted setting. */
+    private fun soundVolumeOverride(): Float? =
+        if (intent?.hasExtra(EXTRA_SOUND_VOLUME) == true) intent.getFloatExtra(EXTRA_SOUND_VOLUME, 0f) else null
+
     private fun animationSpeedOverride(): AnimationSpeed? =
         intent?.getStringExtra(EXTRA_ANIMATION_SPEED)
             ?.let { name -> AnimationSpeed.entries.find { it.name == name } }
@@ -52,7 +59,7 @@ class MainActivity : ComponentActivity() {
         monetization = MonetizationProvider.create(this)
         setContent {
             CardkitTheme {
-                FiveHundredApp(monetization, this, ::newGameSeed, animationSpeedOverride())
+                FiveHundredApp(monetization, this, ::newGameSeed, animationSpeedOverride(), soundVolumeOverride())
             }
         }
     }
@@ -69,6 +76,7 @@ private fun FiveHundredApp(
     activity: Activity,
     nextSeed: () -> Long,
     animationSpeedOverride: AnimationSpeed?,
+    soundVolumeOverride: Float? = null,
 ) {
     val vm: GameViewModel = viewModel()
     // Saveable so an in-progress game survives activity recreation (rotation, theme change, …);
@@ -97,8 +105,15 @@ private fun FiveHundredApp(
     val setNoTrumpsEnabled: (Boolean) -> Unit = { value ->
         scope.launch { settings.setNoTrumpsEnabled(value) }
     }
+    val persistedVolume by settings.soundVolume.collectAsState(initial = 0.7f)
+    val soundVolume = soundVolumeOverride ?: persistedVolume
+    val setSoundVolume: (Float) -> Unit = { value ->
+        scope.launch { settings.setSoundVolume(value) }
+    }
+    // One sound engine for the whole app: reacts to game-state transitions, and hands back a play
+    // function that the dealing animation's sound hook uses for shuffle/deal effects.
+    val playSound = GameSoundEffects(view = view, volume = soundVolume)
     val holdTricks by settings.holdTricks.collectAsState(initial = false)
-    LaunchedEffect(holdTricks) { vm.holdTricks.value = holdTricks }
     val toggleHoldTricks: () -> Unit = {
         scope.launch { settings.setHoldTricks(!holdTricks) }
     }
@@ -110,6 +125,9 @@ private fun FiveHundredApp(
     // saveable so an activity recreation mid-tutorial resumes at the same point in the script.
     var tutorialActive by rememberSaveable { mutableStateOf(false) }
     var tutorialStepIndex by rememberSaveable { mutableStateOf(0) }
+    // The tutorial forces the trick hold on so each completed trick waits to be explained by the
+    // bubble; otherwise the user's setting applies. (Like all pacing, the hold is inert at OFF.)
+    LaunchedEffect(holdTricks, tutorialActive) { vm.holdTricks.value = holdTricks || tutorialActive }
     val startTutorial: () -> Unit = {
         // The tutorial script depends on the exact table: 4 players, 2 teams, misère and no-trumps
         // enabled — pinned here regardless of the user's mode selection and house-rule settings.
@@ -133,6 +151,8 @@ private fun FiveHundredApp(
             onCycleAnimationSpeed = cycleAnimationSpeed,
             sortByDefault = sortByDefault,
             onSetSortByDefault = setSortByDefault,
+            soundVolume = soundVolume,
+            onSetSoundVolume = setSoundVolume,
             misereEnabled = misereEnabled,
             onSetMisereEnabled = setMisereEnabled,
             noTrumpsEnabled = noTrumpsEnabled,
@@ -155,6 +175,8 @@ private fun FiveHundredApp(
                 onCycleAnimationSpeed = cycleAnimationSpeed,
                 sortByDefault = sortByDefault,
                 onSetSortByDefault = setSortByDefault,
+                soundVolume = soundVolume,
+                onSetSoundVolume = setSoundVolume,
                 misereEnabled = misereEnabled,
                 onSetMisereEnabled = setMisereEnabled,
                 noTrumpsEnabled = noTrumpsEnabled,
@@ -185,6 +207,7 @@ private fun FiveHundredApp(
                 holdTricks = holdTricks,
                 onToggleHoldTricks = toggleHoldTricks,
                 onTrickAcknowledged = vm::acknowledgeTrick,
+                soundHook = playSound,
             )
         }
     }

@@ -53,6 +53,9 @@ class GameFlowTest {
                 .putExtra(MainActivity.EXTRA_SEED, SEED)
                 // Disable bot pacing so tests aren't slowed by presentation delays.
                 .putExtra(MainActivity.EXTRA_ANIMATION_SPEED, "OFF")
+                // Silence sounds: native audio playback on the -no-audio emulator can crash the
+                // instrumented process; at 0f the SoundPool is never even created.
+                .putExtra(MainActivity.EXTRA_SOUND_VOLUME, 0f)
         ),
         activityProvider = { scenarioRule ->
             var activity: MainActivity? = null

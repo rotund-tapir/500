@@ -45,6 +45,7 @@ import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.ui.CardBack
 import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.SoundEffect
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -77,6 +78,14 @@ internal data object DeckAnchor
 
 internal class DealAnimationState {
     var stage by mutableStateOf(DealStage.DONE)
+
+    /**
+     * Where deal sounds go: called with [SoundEffect.SHUFFLE] once per riffle and
+     * [SoundEffect.CARD_SLIDE] as each packet lands. Null (the default) means silent — the
+     * integration layer wires this to a `SoundManager`. Kept as a hook so this file stays free
+     * of any audio implementation.
+     */
+    var soundHook: ((SoundEffect) -> Unit)? = null
 
     /** Cards landed so far, per destination. */
     val counts = mutableStateMapOf<DealTarget, Int>()
@@ -155,6 +164,7 @@ internal suspend fun runDealAnimation(
         state.stage = DealStage.SHUFFLING
         val riffles = 3
         repeat(riffles) {
+            state.soundHook?.invoke(SoundEffect.SHUFFLE)
             state.shuffleSplit = true
             delay(timings.shuffleMillis / (riffles * 2L))
             state.shuffleSplit = false
@@ -196,6 +206,7 @@ private suspend fun DealAnimationState.flyPacket(target: DealTarget, cards: Int,
         flyingPos.animateTo(to, tween(flightMillis, easing = FastOutSlowInEasing))
         flyingTarget = null
         counts[target] = (counts[target] ?: 0) + cards
+        soundHook?.invoke(SoundEffect.CARD_SLIDE)
         // A short beat between packets so each delivery registers.
         delay((slotMillis - flightMillis).coerceAtLeast(0).toLong())
     } else {

@@ -135,9 +135,10 @@ fun RulesDialog(onDismiss: () -> Unit) {
                     "Scoring",
                     "If the declarer's side takes at least the bid number of tricks it scores the " +
                         "contract's value; otherwise it loses that value. Taking all 10 tricks is " +
-                        "worth a minimum of 250. The defenders score 10 points per trick they " +
-                        "take, made or not — except against a Misère, where the defenders score " +
-                        "nothing.\n\n" +
+                        "a SLAM, worth a minimum of 250 — so a slam on a cheap contract (like 6♠, " +
+                        "normally 40) still pays 250. The defenders score 10 points per trick " +
+                        "they take, made or not — except against a Misère, where the defenders " +
+                        "score nothing.\n\n" +
                         "A Misère scores only if the declarer takes no tricks at all.",
                 )
                 RuleSection(
