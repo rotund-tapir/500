@@ -114,8 +114,8 @@ private fun FiveHundredApp(
     // function that the dealing animation's sound hook uses for shuffle/deal effects.
     val playSound = GameSoundEffects(view = view, volume = soundVolume)
     val holdTricks by settings.holdTricks.collectAsState(initial = false)
-    val toggleHoldTricks: () -> Unit = {
-        scope.launch { settings.setHoldTricks(!holdTricks) }
+    val setHoldTricks: (Boolean) -> Unit = { value ->
+        scope.launch { settings.setHoldTricks(value) }
     }
     // Stored by name so rememberSaveable needs no custom Saver.
     var modeName by rememberSaveable { mutableStateOf(GameMode.FOUR_PLAYER.name) }
@@ -151,6 +151,8 @@ private fun FiveHundredApp(
             onCycleAnimationSpeed = cycleAnimationSpeed,
             sortByDefault = sortByDefault,
             onSetSortByDefault = setSortByDefault,
+            holdTricks = holdTricks,
+            onSetHoldTricks = setHoldTricks,
             soundVolume = soundVolume,
             onSetSoundVolume = setSoundVolume,
             misereEnabled = misereEnabled,
@@ -175,6 +177,8 @@ private fun FiveHundredApp(
                 onCycleAnimationSpeed = cycleAnimationSpeed,
                 sortByDefault = sortByDefault,
                 onSetSortByDefault = setSortByDefault,
+                holdTricks = holdTricks,
+                onSetHoldTricks = setHoldTricks,
                 soundVolume = soundVolume,
                 onSetSoundVolume = setSoundVolume,
                 misereEnabled = misereEnabled,
@@ -205,9 +209,17 @@ private fun FiveHundredApp(
                 onResultDismissed = vm::acknowledgeHandResult,
                 onDealAnimationFinished = vm::dealAnimationFinished,
                 holdTricks = holdTricks,
-                onToggleHoldTricks = toggleHoldTricks,
+                onSetHoldTricks = setHoldTricks,
                 onTrickAcknowledged = vm::acknowledgeTrick,
                 soundHook = playSound,
+                onCycleAnimationSpeed = cycleAnimationSpeed,
+                onSetSortByDefault = setSortByDefault,
+                soundVolume = soundVolume,
+                onSetSoundVolume = setSoundVolume,
+                misereEnabled = misereEnabled,
+                onSetMisereEnabled = setMisereEnabled,
+                noTrumpsEnabled = noTrumpsEnabled,
+                onSetNoTrumpsEnabled = setNoTrumpsEnabled,
             )
         }
     }

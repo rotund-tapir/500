@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,19 +32,25 @@ import io.github.rotundtapir.fivehundred.BuildConfig
 
 private const val CARD_ART_URL = "https://code.google.com/archive/p/vector-playing-cards/"
 
-/** The settings dialog opened from the home screen's cog button. */
+/**
+ * The settings dialog, opened from the cog on the home screen or in a game. With [inGame] set, the
+ * house-rule switches (which only apply to new games) are disabled.
+ */
 @Composable
 fun SettingsDialog(
     animationSpeed: AnimationSpeed,
     onCycleAnimationSpeed: () -> Unit,
     sortByDefault: Boolean,
     onSetSortByDefault: (Boolean) -> Unit,
+    holdTricks: Boolean,
+    onSetHoldTricks: (Boolean) -> Unit,
     soundVolume: Float,
     onSetSoundVolume: (Float) -> Unit,
     misereEnabled: Boolean,
     onSetMisereEnabled: (Boolean) -> Unit,
     noTrumpsEnabled: Boolean,
     onSetNoTrumpsEnabled: (Boolean) -> Unit,
+    inGame: Boolean,
     monetization: Monetization,
     activity: Activity,
     onDismiss: () -> Unit,
@@ -89,6 +96,18 @@ fun SettingsDialog(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Hold completed tricks")
+                    Switch(
+                        checked = holdTricks,
+                        onCheckedChange = onSetHoldTricks,
+                        modifier = Modifier.testTag("holdTricks"),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -104,15 +123,19 @@ fun SettingsDialog(
                 HorizontalDivider()
 
                 Text("House rules (apply to new games)", style = MaterialTheme.typography.labelMedium)
+                // In-game these can't take effect until the next game — shown but disabled.
+                val houseRuleColor =
+                    if (inGame) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else Color.Unspecified
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Misère bids")
+                    Text("Misère bids", color = houseRuleColor)
                     Switch(
                         checked = misereEnabled,
                         onCheckedChange = onSetMisereEnabled,
+                        enabled = !inGame,
                         modifier = Modifier.testTag("misereEnabled"),
                     )
                 }
@@ -121,10 +144,11 @@ fun SettingsDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("No-trump bids")
+                    Text("No-trump bids", color = houseRuleColor)
                     Switch(
                         checked = noTrumpsEnabled,
                         onCheckedChange = onSetNoTrumpsEnabled,
+                        enabled = !inGame,
                         modifier = Modifier.testTag("noTrumpsEnabled"),
                     )
                 }

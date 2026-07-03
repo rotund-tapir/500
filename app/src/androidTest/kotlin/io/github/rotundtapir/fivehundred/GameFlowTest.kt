@@ -4,6 +4,7 @@ package io.github.rotundtapir.fivehundred
 import android.content.Intent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -372,11 +373,25 @@ class GameFlowTest {
     }
 
     @Test
-    fun menuButton_returnsToHomeScreen() {
+    fun menuButton_confirmsThenReturnsToHomeScreen() {
         startGame()
         waitForBidPanel()
         rule.onNodeWithText("Menu").performClick()
+        waitForText("Leave game?")
+        rule.onNodeWithTag("confirmLeave").performClick()
         rule.onNodeWithText("New Game").assertIsDisplayed()
+    }
+
+    @Test
+    fun menuCancel_staysInGame() {
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithText("Menu").performClick()
+        waitForText("Leave game?")
+        rule.onNodeWithText("Cancel").performClick()
+        rule.waitUntil(STEP_TIMEOUT_MS) { !textExists("Leave game?") }
+        assertTrue("cancelling the leave dialog must keep the game up", textExists("Your bid:"))
+        assertTrue("home screen must not be shown after Cancel", !textExists("New Game"))
     }
 
     @Test
@@ -384,10 +399,53 @@ class GameFlowTest {
         startGame()
         waitForBidPanel()
         rule.onNodeWithText("Menu").performClick()
+        waitForText("Leave game?")
+        rule.onNodeWithTag("confirmLeave").performClick()
         rule.onNodeWithText("New Game").performClick()
         waitForBidPanel()
         assertEquals("fresh hand after restarting from the menu", 10, cardsOnScreen())
         rule.onNodeWithText("Us: 0").assertIsDisplayed()
+    }
+
+    /** Whether the Switch tagged [tag] currently reads as on (null if absent). */
+    private fun switchIsOn(tag: String): Boolean? =
+        nodesWithTag(tag).firstOrNull()
+            ?.config?.getOrNull(SemanticsProperties.ToggleableState)
+            ?.let { it == ToggleableState.On }
+
+    @Test
+    fun inGameSettingsCog_opensDialog_andDisablesHouseRules() {
+        // From home the house-rule switches are live…
+        rule.onNodeWithTag("settingsButton").performClick()
+        rule.onNodeWithTag("misereEnabled").assertIsEnabled()
+        rule.onNodeWithTag("noTrumpsEnabled").assertIsEnabled()
+        rule.onNodeWithText("Done").performClick()
+
+        // …but in-game they only apply to new games, so the same dialog disables them.
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithTag("gameSettingsButton").performClick()
+        rule.onNodeWithTag("misereEnabled").assertIsNotEnabled()
+        rule.onNodeWithTag("noTrumpsEnabled").assertIsNotEnabled()
+        rule.onNodeWithTag("holdTricks").assertIsDisplayed()
+        rule.onNodeWithText("Done").performClick()
+        assertTrue("dismissing settings must return to the table", textExists("Your bid:"))
+    }
+
+    @Test
+    fun inGameSettings_holdTricksSwitch_toggles() {
+        startGame()
+        waitForBidPanel()
+        rule.onNodeWithTag("gameSettingsButton").performClick()
+        val initiallyOn = switchIsOn("holdTricks") == true
+        // The click round-trips through DataStore before the switch recomposes — wait, don't assert.
+        rule.onNodeWithTag("holdTricks").performClick()
+        rule.waitUntil(STEP_TIMEOUT_MS) { switchIsOn("holdTricks") == !initiallyOn }
+        // Toggle back so the persisted setting is unchanged for the other tests.
+        rule.onNodeWithTag("holdTricks").performClick()
+        rule.waitUntil(STEP_TIMEOUT_MS) { switchIsOn("holdTricks") == initiallyOn }
+        rule.onNodeWithText("Done").performClick()
+        assertTrue(textExists("Your bid:"))
     }
 
     @Test

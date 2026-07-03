@@ -26,9 +26,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -135,11 +139,22 @@ fun GameScreen(
     onResultDismissed: (Int) -> Unit = {},
     onDealAnimationFinished: (Int) -> Unit = {},
     holdTricks: Boolean = false,
-    onToggleHoldTricks: () -> Unit = {},
+    onSetHoldTricks: (Boolean) -> Unit = {},
     onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
     soundHook: ((SoundEffect) -> Unit)? = null,
+    // Settings-dialog plumbing (the in-game cog opens the same dialog as the home screen's).
+    onCycleAnimationSpeed: () -> Unit = {},
+    onSetSortByDefault: (Boolean) -> Unit = {},
+    soundVolume: Float = 0f,
+    onSetSoundVolume: (Float) -> Unit = {},
+    misereEnabled: Boolean = true,
+    onSetMisereEnabled: (Boolean) -> Unit = {},
+    noTrumpsEnabled: Boolean = true,
+    onSetNoTrumpsEnabled: (Boolean) -> Unit = {},
 ) {
     var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showLeaveConfirm by remember { mutableStateOf(false) }
     // Set once the tutorial's scripted hand has been scored and its result dialog dismissed.
     var tutorialComplete by rememberSaveable { mutableStateOf(false) }
     // Highest hand number whose result dialog has been dismissed — the shuffle/deal animation of
@@ -186,7 +201,12 @@ fun GameScreen(
                     .safeDrawingPadding()
                     .padding(horizontal = 12.dp),
             ) {
-                ScoreBar(view, botNames, onExit)
+                ScoreBar(
+                    view = view,
+                    botNames = botNames,
+                    onOpenSettings = { showSettings = true },
+                    onMenu = { showLeaveConfirm = true },
+                )
                 ContractLine(view, botNames)
                 Spacer(Modifier.height(12.dp))
                 OpponentsRow(view, botNames, dealState)
@@ -203,7 +223,6 @@ fun GameScreen(
                     // The tutorial always holds completed tricks so the bubble can explain each
                     // outcome (still inert at OFF, like all pacing).
                     forceHold = tutorial != null,
-                    onToggleHoldTricks = onToggleHoldTricks,
                     onTrickAcknowledged = onTrickAcknowledged,
                 )
                 if (dealState.dealing) {
@@ -236,6 +255,43 @@ fun GameScreen(
                 TutorialBubble(tutorial, view, botNames, tutorialTargets, dealState.overlayOrigin)
             }
         }
+    }
+
+    if (showSettings) {
+        SettingsDialog(
+            animationSpeed = animationSpeed,
+            onCycleAnimationSpeed = onCycleAnimationSpeed,
+            sortByDefault = defaultSortHand,
+            onSetSortByDefault = onSetSortByDefault,
+            holdTricks = holdTricks,
+            onSetHoldTricks = onSetHoldTricks,
+            soundVolume = soundVolume,
+            onSetSoundVolume = onSetSoundVolume,
+            misereEnabled = misereEnabled,
+            onSetMisereEnabled = onSetMisereEnabled,
+            noTrumpsEnabled = noTrumpsEnabled,
+            onSetNoTrumpsEnabled = onSetNoTrumpsEnabled,
+            inGame = true,
+            monetization = monetization,
+            activity = activity,
+            onDismiss = { showSettings = false },
+        )
+    }
+
+    if (showLeaveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLeaveConfirm = false },
+            title = { Text("Leave game?") },
+            text = { Text("The current game will be lost.") },
+            confirmButton = {
+                TextButton(onClick = onExit, modifier = Modifier.testTag("confirmLeave")) {
+                    Text("Leave")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveConfirm = false }) { Text("Cancel") }
+            },
+        )
     }
 
     view.winner?.let { winningTeam ->
@@ -591,7 +647,12 @@ private fun ScoreDeltaRow(label: String, delta: Int, explanation: String) {
 }
 
 @Composable
-private fun ScoreBar(view: PlayerView, botNames: Map<Seat, String>, onExit: () -> Unit) {
+private fun ScoreBar(
+    view: PlayerView,
+    botNames: Map<Seat, String>,
+    onOpenSettings: () -> Unit,
+    onMenu: () -> Unit,
+) {
     val myTeam = view.myTeam
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -614,10 +675,22 @@ private fun ScoreBar(view: PlayerView, botNames: Map<Seat, String>, onExit: () -
                 modifier = Modifier.weight(1f),
             )
         }
-        TextButton(
-            onClick = onExit,
-            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
-        ) { Text("Menu") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.testTag("gameSettingsButton"),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+            TextButton(
+                onClick = onMenu,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
+            ) { Text("Menu") }
+        }
     }
 }
 
@@ -752,14 +825,13 @@ private fun TrickArea(
     dealState: DealAnimationState,
     modifier: Modifier = Modifier,
     holdTricks: Boolean = false,
-    // Forces the hold on regardless of the toggle — the tutorial uses this so every completed
-    // trick waits to be explained. The toggle button is hidden while forced.
+    // Forces the hold on regardless of the setting — the tutorial uses this so every completed
+    // trick waits to be explained.
     forceHold: Boolean = false,
-    onToggleHoldTricks: () -> Unit = {},
     onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
 ) {
-    // With "Hold tricks" on, a completed trick stays on the felt until the player taps it away —
-    // time to memorise the cards for counting. Toggleable mid-hand for the tricks that matter.
+    // With "Hold completed tricks" on (in settings), a completed trick stays on the felt until the
+    // player taps it away — time to memorise the cards for counting.
     val holdingTrick = (holdTricks || forceHold) &&
         animationSpeed != AnimationSpeed.OFF &&
         !dealState.dealing &&
@@ -776,36 +848,6 @@ private fun TrickArea(
             .tappableWhen(holdingTrick) { onTrickAcknowledged(view.handNumber, view.trickNumber) },
         contentAlignment = Alignment.Center,
     ) {
-        // Visible for the whole hand so the player can hold exactly the tricks they care about
-        // (hidden at OFF, where no pacing — including the hold — applies, and while the tutorial
-        // forces the hold on: the bubble's notes drive the pacing there, not the toggle).
-        if (view.phase == Phase.PLAY && !dealState.dealing &&
-            animationSpeed != AnimationSpeed.OFF && !forceHold
-        ) {
-            OutlinedButton(
-                onClick = onToggleHoldTricks,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (holdTricks) {
-                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.18f)
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .height(30.dp)
-                    .testTag("holdToggle"),
-            ) {
-                Text(
-                    if (holdTricks) "Hold tricks: on" else "Hold tricks: off",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
         if (dealState.dealing) {
             // Deck + growing kitty pile while cards fly out.
             DealFelt(dealState)
