@@ -51,6 +51,8 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the GitHub release and upload the APK
     steps:
       - uses: actions/checkout@v4
         with:
