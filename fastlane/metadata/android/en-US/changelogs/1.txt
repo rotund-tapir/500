@@ -1,0 +1,1 @@
+Initial release: 4-player Australian 500 against three bots, with 2- and 6-player variants, an interactive tutorial, misère and no-trump house rules, sound effects, and full offline play.

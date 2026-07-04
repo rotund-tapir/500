@@ -168,6 +168,15 @@ fun SettingsDialog(
                         }
                     )
                 }
+                // EEA/UK users may revisit their ad-consent choices (a Google UMP requirement).
+                // Never shown in FOSS builds, where privacyOptionsRequired is always false.
+                val privacyOptionsRequired by monetization.privacyOptionsRequired.collectAsState()
+                if (privacyOptionsRequired) {
+                    OutlinedButton(
+                        onClick = { monetization.showPrivacyOptionsForm(activity) },
+                        modifier = Modifier.fillMaxWidth().testTag("privacyOptions"),
+                    ) { Text("Privacy options") }
+                }
                 OutlinedButton(
                     onClick = { showRules = true },
                     modifier = Modifier.fillMaxWidth().testTag("helpButton"),

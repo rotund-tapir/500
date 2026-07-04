@@ -16,6 +16,16 @@ Built on the shared [`cardkit`](https://github.com/rotund-tapir/cardkit) library
 The two are the `play` and `foss` build flavors. The F-Droid build excludes the
 `cardkit-monetization-play` module entirely, so it contains no non-free code.
 
+## Install
+
+- **Google Play**: coming with the 0.1 release.
+- **GitHub**: signed ad-free APKs are attached to
+  [releases](https://github.com/rotund-tapir/500/releases) (sideload; updates keep
+  the same signature).
+- **F-Droid**: submission planned after the first tagged release.
+
+Support development via [Liberapay](https://liberapay.com/rotund-tapir).
+
 ## Building
 
 ```bash

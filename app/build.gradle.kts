@@ -7,6 +7,14 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+// Release signing: CI exports these as env vars from repo secrets (see .github/workflows/ci.yml);
+// locally they can live in ~/.gradle/gradle.properties. Absent ⇒ unsigned release artifacts, which
+// is right for local builds and for F-Droid (it signs with its own key).
+fun secret(name: String): String? =
+    providers.environmentVariable(name).orNull ?: providers.gradleProperty(name).orNull
+
+val releaseKeystore: String? = secret("KEYSTORE_FILE")
+
 android {
     namespace = "io.github.rotundtapir.fivehundred"
     compileSdk = 35
@@ -40,10 +48,32 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = secret("KEYSTORE_PASSWORD")
+                keyAlias = secret("KEY_ALIAS")
+                keyPassword = secret("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Deliberately not minified for 0.1: R8 failures only surface at runtime in release
+            // builds, where test coverage is thinnest. Revisit with a QA pass once released.
             isMinifyEnabled = false
+            // Null when no keystore is configured — the artifact is then unsigned.
+            signingConfig = signingConfigs.findByName("release")
         }
+    }
+
+    dependenciesInfo {
+        // The AGP dependency block is encrypted with a Google-only key; F-Droid rejects APKs
+        // carrying such an opaque blob. Play works fine without it.
+        includeInApk = false
+        includeInBundle = false
     }
 
     compileOptions {

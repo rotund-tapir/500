@@ -10,7 +10,7 @@ import io.github.rotundtapir.cardkit.monetization.foss.FossMonetization
  * This is the flavor F-Droid builds.
  */
 object MonetizationProvider {
-    // TODO: set to your real donation page (e.g. Liberapay / GitHub Sponsors) before release.
+    // Kept in sync with .github/FUNDING.yml (F-Droid parses that file for its Donate metadata).
     private const val DONATION_URL = "https://liberapay.com/rotund-tapir"
 
     fun create(context: Context): Monetization = FossMonetization(DONATION_URL)
