@@ -8,13 +8,21 @@ import io.github.rotundtapir.cardkit.monetization.play.PlayMonetization
 /**
  * Google Play flavor: Google Mobile Ads plus a one-time "remove ads" purchase.
  *
- * These are Google's official **test** ad unit ids and a placeholder product id — replace them (and
- * the AdMob application id in this flavor's AndroidManifest) with your real values before release.
+ * Debug builds use Google's official **test** ad unit ids so development can never generate
+ * invalid traffic against the real AdMob account; release builds use the real units.
  */
 object MonetizationProvider {
     private val config = PlayMonetization.Config(
-        bannerAdUnitId = "ca-app-pub-3940256099942544/6300978111",       // AdMob test banner
-        interstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712", // AdMob test interstitial
+        bannerAdUnitId = if (BuildConfig.DEBUG) {
+            "ca-app-pub-3940256099942544/6300978111" // AdMob test banner
+        } else {
+            "ca-app-pub-8530652887083578/4781827034"
+        },
+        interstitialAdUnitId = if (BuildConfig.DEBUG) {
+            "ca-app-pub-3940256099942544/1033173712" // AdMob test interstitial
+        } else {
+            "ca-app-pub-8530652887083578/9928166330"
+        },
         removeAdsProductId = "remove_ads",
         // Debug builds force the EEA consent form so the UMP flow is always exercisable.
         consentDebugGeographyEea = BuildConfig.DEBUG,

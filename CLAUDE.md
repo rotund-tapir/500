@@ -98,6 +98,8 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
 - Namespace is `io.github.rotundtapir.*` (final — the sanitized `io.github.<org>` form of the
   `rotund-tapir` GitHub org; hyphens are illegal in package names). `applicationId` is
   `io.github.rotundtapir.fivehundred`.
-- Placeholders still to set before release (intentionally left): real AdMob ad-unit/app ids and the
-  `remove_ads` product (currently Google test ids), and the donation URL in
-  `app/src/foss/.../MonetizationProvider.kt`.
+- Monetization ids are real: the AdMob app id lives in `app/src/play/AndroidManifest.xml`; the play
+  `MonetizationProvider` uses Google's test ad units in debug builds and the real units in release
+  (never point debug builds at the real units — invalid-traffic risk). The `remove_ads` Play Console
+  product and the Liberapay donation URL match what's in code. Store listing title is fastlane's
+  `title.txt` ("500 - Card game"); the launcher label stays "500".
