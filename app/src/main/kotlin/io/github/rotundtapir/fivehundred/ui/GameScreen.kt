@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -99,6 +100,7 @@ import io.github.rotundtapir.fivehundred.engine.TrickEvaluator
 import io.github.rotundtapir.fivehundred.engine.TrickPlay
 import io.github.rotundtapir.fivehundred.engine.Trump
 import io.github.rotundtapir.fivehundred.engine.label
+import io.github.rotundtapir.fivehundred.engine.nextSeat
 import io.github.rotundtapir.fivehundred.engine.teamOf
 
 private fun seatLabel(view: PlayerView, botNames: Map<Seat, String>, seat: Seat): String =
@@ -1061,23 +1063,59 @@ private fun TrickArea(
 
 @Composable
 private fun TrickPlaysRow(view: PlayerView, botNames: Map<Seat, String>, plays: List<TrickPlay>) {
-    // Six-player tricks don't fit in one row on a phone — split into two rows (3+3, or 3+2)
-    // so the cards stay full size.
-    if (plays.size <= 4) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            plays.forEach { play -> TrickPlayCell(view, botNames, play) }
-        }
-    } else {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            plays.chunked((plays.size + 1) / 2).forEach { rowPlays ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowPlays.forEach { play -> TrickPlayCell(view, botNames, play) }
+    // Lay the trick out in its FINAL geometry from the first card: one slot per active seat, in
+    // play order, with the still-to-play seats as faint placeholders. Cards land in place and
+    // never shift as later plays arrive (before this, a six-player trick reflowed from one row
+    // into two when the fifth card landed).
+    val played = plays.map { it.seat }.toSet()
+    val upcoming = generateSequence(nextSeat(plays.last().seat, view.playerCount)) { nextSeat(it, view.playerCount) }
+        .take(view.playerCount)
+        .filter { it in view.activeSeats && it !in played }
+        .toList()
+    val slots: List<Pair<Seat, TrickPlay?>> =
+        plays.map { it.seat to it } + upcoming.map { it to null }
+    // Six-player tricks don't fit in one row on a phone — split into two rows (3+3, or 3+2 in
+    // Misère) so the cards stay full size.
+    val rows = if (slots.size <= 4) listOf(slots) else slots.chunked((slots.size + 1) / 2)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        rows.forEach { rowSlots ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowSlots.forEach { (seat, play) ->
+                    if (play != null) {
+                        TrickPlayCell(view, botNames, play)
+                    } else {
+                        EmptyTrickSlot(view, botNames, seat)
+                    }
                 }
             }
         }
+    }
+}
+
+/** A yet-to-play seat's slot in the trick: a card-sized outline over a dimmed seat name. */
+@Composable
+private fun EmptyTrickSlot(view: PlayerView, botNames: Map<Seat, String>, seat: Seat) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            // Mirrors PlayingCard's geometry at width 56.dp (height ×1.4, corner radius ×0.08)
+            // so the slot reserves exactly the space the card will take.
+            modifier = Modifier
+                .size(56.dp, 56.dp * 1.4f)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.18f),
+                    RoundedCornerShape(56.dp * 0.08f),
+                ),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            seatLabel(view, botNames, seat),
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+        )
     }
 }
 
