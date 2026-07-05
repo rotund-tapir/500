@@ -545,6 +545,33 @@ class GameFlowTest {
         throw AssertionError("game did not end within 300s")
     }
 
+    /** Three-team flavour of the game-end flow: the score sheet must carry all three team columns. */
+    @Test
+    fun threeTeamsGameEnd_scoreSheetShowsAllTeams() {
+        rule.onNodeWithTag("mode:6p3t").performClick()
+        startGame()
+        val deadline = System.currentTimeMillis() + 300_000
+        while (System.currentTimeMillis() < deadline) {
+            playUntilHandResultOrGameEnd()
+            if (textExists("Contract made!") || textExists("Contract failed")) {
+                rule.onNodeWithTag("handResultContinue").performClick()
+                rule.waitForIdle()
+            }
+            if (textExists("You win!") || textExists("You lose")) {
+                rule.waitUntil(STEP_TIMEOUT_MS) { textExists("Hand") }
+                // Every opposing team is named (stacked "A &\nB" labels) in the sheet header.
+                assertTrue(
+                    "score sheet must name both opposing teams",
+                    textExists(" &\n", substring = true),
+                )
+                rule.onNodeWithTag("backToMenu").performClick()
+                rule.waitUntil(STEP_TIMEOUT_MS) { textExists("New Game") }
+                return
+            }
+        }
+        throw AssertionError("three-team game did not end within 300s")
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Generic hand driver
     // ---------------------------------------------------------------------------------------------

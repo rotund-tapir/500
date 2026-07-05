@@ -714,18 +714,23 @@ private fun GameOverDialog(
                     )
                 }
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                    // Final totals, the winning team's tinted to match the banner.
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    // Final totals, the winning team's tinted to match the banner. Paired team
+                    // names stack onto two lines rather than ellipsizing in their third of the row.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
                         teamsInOrder.forEach { team ->
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Text(
-                                    columnLabel(team),
+                                    columnLabel(team).replace(" & ", " &\n"),
                                     style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
                                 )
                                 Text(
                                     "${view.scores[team] ?: 0}",
@@ -739,8 +744,13 @@ private fun GameOverDialog(
                     Spacer(Modifier.height(12.dp))
                     HorizontalDivider()
                     Spacer(Modifier.height(12.dp))
-                    // Score sheet header: contract column, then one delta column per team.
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    // Score sheet header: contract column, then one delta column per team. Paired
+                    // team names ("Wally & Olive") don't fit a delta column on one line, so stack
+                    // them ("Wally &" over "Olive") instead of ellipsizing into "Wally & …".
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
                         Text(
                             "Hand",
                             style = MaterialTheme.typography.labelMedium,
@@ -749,13 +759,19 @@ private fun GameOverDialog(
                         )
                         teamsInOrder.forEach { team ->
                             Text(
-                                columnLabel(team),
-                                style = MaterialTheme.typography.labelMedium,
+                                columnLabel(team).replace(" & ", " &\n"),
+                                style = if (view.teamCount == 2) {
+                                    MaterialTheme.typography.labelMedium
+                                } else {
+                                    MaterialTheme.typography.labelSmall
+                                },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.End,
-                                modifier = Modifier.width(teamCellWidth),
+                                modifier = Modifier
+                                    .width(teamCellWidth)
+                                    .padding(start = 6.dp),
                             )
                         }
                     }
@@ -781,7 +797,9 @@ private fun GameOverDialog(
                                 Text(
                                     "${r.contract.bid.label} · ${seatLabel(view, botNames, r.contract.declarer)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
+                                    // Long contracts ("Misère · Thelma") wrap rather than losing
+                                    // the declarer to an ellipsis in the narrow three-team layout.
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
