@@ -155,7 +155,7 @@ Costs common to every scenario:
 
 | Item | Cost | Notes |
 |---|---|---|
-| Domain | ~$10–15/yr | Needed everywhere — it is also the TLS identity. Cloudflare Registrar sells at cost (~$10.44/yr for .com). Free DDNS subdomains work but look bad as an app's hardcoded default server |
+| Domain | $1–15/yr | Needed everywhere — it is also the TLS identity. Cloudflare Registrar sells .com at cost (~$10.44/yr); a 6–9-digit numeric .xyz ("1.111B class", e.g. `500500500.xyz`) is $0.99/yr to register *and renew* by registry policy — a real owned domain, Cloudflare-compatible. See "Free domain options" below |
 | TLS certificate | $0 | Let's Encrypt, or terminate at Cloudflare's edge |
 | Monitoring | $0 | UptimeRobot / healthchecks.io free tiers |
 | Backups | ~$0 | Game state is ephemeral (a crashed game is a lost hand, not lost data); config lives in git |
@@ -183,6 +183,18 @@ the heap capped (`-Xmx192m`, SerialGC) runs ~150–250 MB RSS and hundreds of co
 games fit inside that heap; budget ~80–100 MB for minimal Debian + sshd, add zram/swap as
 an OOM safety net and a systemd restart policy. GraalVM native-image (~50 MB RSS) is the
 escape hatch; the ~$5–6 1 GB tier buys the right to never think about any of this.
+
+**Free domain options.** Truly free subdomains exist and are fine for self-hosters
+(DuckDNS `*.duckdns.org`, FreeDNS/afraid.org, deSEC `*.dedyn.io` — all with dynamic-update
+APIs and Let's Encrypt support; Tailscale Funnel's `*.ts.net` additionally solves the
+port-forward/CGNAT problem for a Pi). But for the *official default* baked into shipped
+APKs they carry non-monetary costs: the parent domain belongs to a third party (if the
+service folds, every installed app points at an unrecoverable — and potentially
+squattable — name; cf. Freenom), free-DDNS domains are widely blocklisted due to malware
+abuse, and none can be placed behind Cloudflare (proxy and Tunnel need a zone you
+control), forfeiting the IPv6-only and hide-home-IP workarounds. The ~$1/yr numeric .xyz
+keeps real ownership and Cloudflare compatibility, so the official name should be an
+owned domain; free DDNS remains the right answer for family Pi servers.
 
 **IPv6-only reachability is asymmetric.** Android on cellular is mostly fine (mobile
 carriers are heavily IPv6; their 464XLAT helps clients reach IPv4-only *servers*, not the
