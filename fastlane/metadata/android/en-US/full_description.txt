@@ -1,14 +1,15 @@
-500 is a classic 4-player partnership trick-taking card game, popular in
-Australia and New Zealand. Partner up and play against three computer opponents.
+500 is the classic trick-taking card game of Australia and New Zealand. Outbid the other side, call trumps, and steer your partnership to 500 points — with the Joker, both bowers, and the ever-tempting Misère along the way.
+
+New to 500? The interactive tutorial deals you a real hand and coaches you through every bid, discard and trick — the fastest way to learn the game that keeps families arguing (fondly) for generations.
 
 Features:
-* Standard 4-player Australian rules: a 43-card deck with the Joker, a 3-card
-  kitty, bidding from 6 to 10 tricks across the suits and no-trumps, plus Misère
-  and Open Misère.
-* Play offline against three AI opponents — no account, no network required.
-* First partnership to 500 points wins.
+* Full Australian rules: a 43-card deck with the Joker, both bowers, a 3-card kitty, bidding from 6 to 10 tricks across the suits and no-trumps, plus Misère and Open Misère.
+* Play offline against capable AI opponents — no account, no network required.
+* Four ways to play: the classic 4-player partnership game, 2-player head-to-head, or 6 players as two teams of three or three teams of two.
+* Interactive tutorial that teaches by playing, not by reading.
+* House rules: switch Misère or no-trumps bidding off to match how your table plays.
+* Learn to count cards: hold each finished trick on the table for as long as you like, and slow down or speed up the pace to taste.
+* A proper score sheet: every hand's contract and points, tallied at game end.
+* First side to 500 points wins.
 
-This app is free and open source. The version on F-Droid and GitHub is completely
-ad-free; if you enjoy it, please consider supporting development via the donation
-link. (The Google Play version instead shows ads, with an optional purchase to
-remove them.)
+This app is free and open source. Source code at https://github.com/rotundtapir/500
