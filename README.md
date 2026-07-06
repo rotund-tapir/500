@@ -5,6 +5,7 @@ game (Australian rules). Play against three AI opponents offline.
 
 Built on the shared [`cardkit`](https://github.com/rotundtapir/cardkit) library
 (included here as a git submodule), the first of a suite of card-game apps.
+Where it's heading: [ROADMAP.md](ROADMAP.md).
 
 ## Distribution
 
