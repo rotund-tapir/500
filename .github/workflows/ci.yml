@@ -84,3 +84,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/foss/release/*.apk
+
+      # The play AAB is for the Play Console, not for sideloading: expose it as a private
+      # workflow artifact (Actions -> run -> Artifacts) rather than on the public release.
+      - name: Upload play AAB as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-release-aab
+          path: app/build/outputs/bundle/playRelease/*.aab
+          if-no-files-found: error
