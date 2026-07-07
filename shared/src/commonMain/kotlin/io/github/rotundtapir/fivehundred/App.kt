@@ -34,7 +34,9 @@ fun FiveHundredApp(
     animationSpeedOverride: AnimationSpeed? = null,
     soundVolumeOverride: Float? = null,
 ) {
-    val vm: GameViewModel = viewModel()
+    // Explicit initializer: the reflection-based default ViewModel factory is JVM-only, so a
+    // bare viewModel() throws UnsupportedOperationException on wasm.
+    val vm: GameViewModel = viewModel { GameViewModel() }
     // Saveable so an in-progress game survives activity recreation (rotation, theme change, …);
     // the game itself lives in the ViewModel. (On web this degrades to remember {}.)
     var inGame by rememberSaveable { mutableStateOf(false) }

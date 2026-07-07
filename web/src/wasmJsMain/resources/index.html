@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>500 — Card game</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1b5e20; /* the card-table green, so loading doesn't flash white */
+        }
+        #loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: #ffffff;
+            font-family: system-ui, sans-serif;
+            text-align: center;
+            padding: 0 24px;
+        }
+        #loading .note {
+            font-size: 0.85em;
+            opacity: 0.75;
+        }
+    </style>
+</head>
+<body>
+<!-- Removed by main() once the wasm module is up; if it stays, the browser hint below applies. -->
+<div id="loading">
+    <div>Loading 500…</div>
+    <div class="note">
+        Needs a browser with WebAssembly garbage collection:
+        Chrome/Edge 119+, Firefox 120+, or Safari 18.2+.
+    </div>
+</div>
+<script src="fivehundred.js"></script>
+</body>
+</html>
