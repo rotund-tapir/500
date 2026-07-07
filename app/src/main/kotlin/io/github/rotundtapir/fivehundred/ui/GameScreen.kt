@@ -30,8 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -869,7 +867,7 @@ private fun ScoreBar(
                 modifier = Modifier.testTag("gameSettingsButton"),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Settings,
+                    imageVector = SettingsIcon,
                     contentDescription = "Settings",
                     tint = MaterialTheme.colorScheme.onBackground,
                 )

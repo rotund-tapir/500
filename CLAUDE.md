@@ -21,7 +21,7 @@ game-agnostic infrastructure lives in `cardkit`.
   ```
   Kotlin/JVM modules pin `jvmToolchain(21)`; Android modules pin `jvmTarget = 17`.
 - `gradle` is not on PATH; use the committed wrapper `./gradlew` (or `source ~/.sdkman/bin/sdkman-init.sh`).
-- The Android SDK here has only `platforms;android-35` + `build-tools;35.0.0`.
+- The Android SDK here has `platforms;android-36` + `build-tools;36.0.0` (compileSdk 36).
 
 ## Common commands
 
