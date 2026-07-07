@@ -128,6 +128,9 @@ private fun sortedForDisplay(hand: List<Card>, trump: Trump?): List<Card> {
 
 private fun signed(delta: Int): String = if (delta < 0) "−${-delta}" else "+$delta"
 
+/** Amber used to make the partner's name pop against the felt (readable on the dark green). */
+private val PartnerHighlight = Color(0xFFFFD54F)
+
 @Composable
 fun GameScreen(
     view: PlayerView,
@@ -925,13 +928,17 @@ private fun OpponentStatus(
     val textStyle = if (compact) MaterialTheme.typography.bodySmall else LocalTextStyle.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         val active = seat in view.activeSeats
+        // Your partner's tricks are your tricks, so their name reads at a glance: always bold,
+        // in a warm yellow that stands out on the felt without fighting the white text.
+        val isPartner = teamOf(seat, view.teamCount) == view.myTeam
         Text(
             seatLabel(view, botNames, seat),
             style = textStyle,
-            fontWeight = if (view.toAct == seat) FontWeight.Bold else FontWeight.Normal,
+            color = if (isPartner) PartnerHighlight else Color.Unspecified,
+            fontWeight = if (view.toAct == seat || isPartner) FontWeight.Bold else FontWeight.Normal,
         )
-        if (teamOf(seat, view.teamCount) == view.myTeam) {
-            Text("(partner)", style = MaterialTheme.typography.labelSmall)
+        if (isPartner) {
+            Text("(partner)", style = MaterialTheme.typography.labelSmall, color = PartnerHighlight)
         }
         if (active) {
             OpponentPile(
