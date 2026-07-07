@@ -31,4 +31,5 @@ includeBuild("cardkit")
 
 include(":engine")
 include(":ai")
+include(":shared")
 include(":app")

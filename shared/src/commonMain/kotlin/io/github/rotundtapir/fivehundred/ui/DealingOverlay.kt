@@ -48,6 +48,7 @@ import io.github.rotundtapir.fivehundred.AnimationSpeed
 import io.github.rotundtapir.cardkit.ui.SoundEffect
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -171,13 +172,13 @@ internal suspend fun runDealAnimation(
             delay(timings.shuffleMillis / (riffles * 2L))
         }
         state.stage = DealStage.DEALING
-        val startNanos = System.nanoTime()
+        val dealStart = TimeSource.Monotonic.markNow()
         var flown = 0
         // Deal order: eldest hand (left of dealer) first, dealer last — a visible packet of 3/4/3
         // cards per seat, then a single card to the kitty after each full round of packets.
         val seats = (1..playerCount).map { Seat((dealer.index + it) % playerCount) }
         suspend fun fly(target: DealTarget, cards: Int) {
-            val elapsed = (System.nanoTime() - startNanos) / 1_000_000
+            val elapsed = dealStart.elapsedNow().inWholeMilliseconds
             val remaining = timings.flyBudgetMillis - elapsed
             val slot = (remaining / (totalFlights - flown)).toInt()
             state.flyPacket(target, cards, slot)

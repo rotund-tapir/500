@@ -89,9 +89,8 @@ kotlin {
 }
 
 dependencies {
-    // Local 500 modules.
-    implementation(project(":engine"))
-    implementation(project(":ai"))
+    // The shared multiplatform UI (screens + GameViewModel); brings engine/ai/cardkit with it.
+    implementation(project(":shared"))
 
     // Shared cardkit modules (resolved from the submodule via the composite build).
     implementation(libs.cardkit.ui)
@@ -108,8 +107,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
     // On-device integration tests (Compose UI driving a real game against the bots).

@@ -10,76 +10,59 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/** How quickly bot turns play out (the delay before each bot decision). */
-enum class AnimationSpeed(val label: String, val botDelayMillis: Long) {
-    SLOW("Slow", 1600),
-    NORMAL("Normal", 800),
-    FAST("Fast", 250),
-    OFF("Off", 0);
-
-    /** The next speed in the cycle Slow → Normal → Fast → Off → Slow. */
-    fun next(): AnimationSpeed = entries[(ordinal + 1) % entries.size]
-}
-
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-/** Persisted user preferences, backed by Jetpack DataStore. */
-class SettingsRepository(context: Context) {
+/** [SettingsRepository] backed by Jetpack DataStore — the Android implementation. */
+class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     private val dataStore = context.applicationContext.settingsDataStore
 
-    /** The persisted animation speed; [AnimationSpeed.NORMAL] when unset or unrecognised. */
-    val animationSpeed: Flow<AnimationSpeed> = dataStore.data.map { preferences ->
+    override val animationSpeed: Flow<AnimationSpeed> = dataStore.data.map { preferences ->
         preferences[ANIMATION_SPEED_KEY]
             ?.let { stored -> AnimationSpeed.entries.find { it.name == stored } }
             ?: AnimationSpeed.NORMAL
     }
 
-    suspend fun setAnimationSpeed(speed: AnimationSpeed) {
+    override suspend fun setAnimationSpeed(speed: AnimationSpeed) {
         dataStore.edit { preferences -> preferences[ANIMATION_SPEED_KEY] = speed.name }
     }
 
-    /** Whether new hands start sorted; false (deal order) when unset. */
-    val sortHandByDefault: Flow<Boolean> = dataStore.data.map { preferences ->
+    override val sortHandByDefault: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[SORT_HAND_BY_DEFAULT_KEY] ?: false
     }
 
-    suspend fun setSortHandByDefault(value: Boolean) {
+    override suspend fun setSortHandByDefault(value: Boolean) {
         dataStore.edit { preferences -> preferences[SORT_HAND_BY_DEFAULT_KEY] = value }
     }
 
-    /** House rule: whether Misère / Open Misère may be bid. Applies to new games; true when unset. */
-    val misereEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+    override val misereEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[MISERE_ENABLED_KEY] ?: true
     }
 
-    suspend fun setMisereEnabled(value: Boolean) {
+    override suspend fun setMisereEnabled(value: Boolean) {
         dataStore.edit { preferences -> preferences[MISERE_ENABLED_KEY] = value }
     }
 
-    /** House rule: whether no-trump contracts may be bid. Applies to new games; true when unset. */
-    val noTrumpsEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+    override val noTrumpsEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[NO_TRUMPS_ENABLED_KEY] ?: true
     }
 
-    suspend fun setNoTrumpsEnabled(value: Boolean) {
+    override suspend fun setNoTrumpsEnabled(value: Boolean) {
         dataStore.edit { preferences -> preferences[NO_TRUMPS_ENABLED_KEY] = value }
     }
 
-    /** Whether completed tricks stay on the felt until tapped away; false when unset. */
-    val holdTricks: Flow<Boolean> = dataStore.data.map { preferences ->
+    override val holdTricks: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[HOLD_TRICKS_KEY] ?: false
     }
 
-    suspend fun setHoldTricks(value: Boolean) {
+    override suspend fun setHoldTricks(value: Boolean) {
         dataStore.edit { preferences -> preferences[HOLD_TRICKS_KEY] = value }
     }
 
-    /** Sound-effect volume, 0f (muted) to 1f; 0.7f when unset. */
-    val soundVolume: Flow<Float> = dataStore.data.map { preferences ->
+    override val soundVolume: Flow<Float> = dataStore.data.map { preferences ->
         (preferences[SOUND_VOLUME_KEY] ?: 0.7f).coerceIn(0f, 1f)
     }
 
-    suspend fun setSoundVolume(value: Float) {
+    override suspend fun setSoundVolume(value: Float) {
         dataStore.edit { preferences -> preferences[SOUND_VOLUME_KEY] = value.coerceIn(0f, 1f) }
     }
 
