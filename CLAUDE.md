@@ -26,17 +26,18 @@ game-agnostic infrastructure lives in `cardkit`.
 ## Common commands
 
 ```bash
-# Pure-Kotlin logic (fast, no Android SDK needed) — the engine is the important part
-./gradlew :engine:test
-./gradlew :ai:test
+# Pure-Kotlin logic (fast, no Android SDK needed) — the engine is the important part.
+# engine/ai/cardkit-core are Kotlin Multiplatform (jvm + wasmJs); unit tests live in jvmTest.
+./gradlew :engine:jvmTest
+./gradlew :ai:jvmTest
 
 # A single test class (JUnit 5 platform)
-./gradlew :engine:test --tests "io.github.rotundtapir.fivehundred.engine.TrickEvaluatorTest"
+./gradlew :engine:jvmTest --tests "io.github.rotundtapir.fivehundred.engine.TrickEvaluatorTest"
 
 # Build both distribution flavors
 ./gradlew assembleFossDebug assemblePlayDebug
 
-# Lint (this is what CI runs via `build`; a pre-commit hook runs `lint test` too)
+# Lint (this is what CI runs via `build`; a pre-commit hook runs `lint jvmTest` too)
 ./gradlew lint
 
 # On-device integration tests (Compose UI driving real games; ~2 min on the emulator).
@@ -49,7 +50,7 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedFossDebugAndroidTest
 ```
 
 Enable the pre-commit hook once per clone: `git config core.hooksPath scripts/hooks` (runs
-`./gradlew lint test`; skips doc-only commits; auto-selects JDK 21; bypass with `--no-verify`).
+`./gradlew lint jvmTest`; skips doc-only commits; auto-selects JDK 21; bypass with `--no-verify`).
 
 ## Architecture
 
