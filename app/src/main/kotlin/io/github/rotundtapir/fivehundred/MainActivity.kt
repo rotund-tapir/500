@@ -140,7 +140,6 @@ private fun FiveHundredApp(
     if (!inGame) {
         HomeScreen(
             monetization = monetization,
-            activity = activity,
             onNewGame = {
                 vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
                 tutorialActive = false
@@ -167,7 +166,6 @@ private fun FiveHundredApp(
         if (current == null) {
             HomeScreen(
                 monetization = monetization,
-                activity = activity,
                 onNewGame = {
                     vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
                     tutorialActive = false
@@ -195,7 +193,6 @@ private fun FiveHundredApp(
                 animationSpeed = animationSpeed,
                 defaultSortHand = sortByDefault,
                 monetization = monetization,
-                activity = activity,
                 onBid = vm::placeBid,
                 onDiscard = vm::discard,
                 onPlay = { card -> vm.playCard(card) },

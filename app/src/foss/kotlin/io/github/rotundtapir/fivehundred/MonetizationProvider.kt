@@ -13,5 +13,5 @@ object MonetizationProvider {
     // Kept in sync with .github/FUNDING.yml (F-Droid parses that file for its Donate metadata).
     private const val DONATION_URL = "https://liberapay.com/rotund-tapir"
 
-    fun create(context: Context): Monetization = FossMonetization(DONATION_URL)
+    fun create(context: Context): Monetization = FossMonetization(context, DONATION_URL)
 }

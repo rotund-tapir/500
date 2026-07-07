@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 package io.github.rotundtapir.fivehundred.ui
 
-import android.app.Activity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -136,7 +135,6 @@ fun GameScreen(
     animationSpeed: AnimationSpeed,
     defaultSortHand: Boolean,
     monetization: Monetization,
-    activity: Activity,
     onBid: (Bid) -> Unit,
     onDiscard: (List<Card>) -> Unit,
     onPlay: (Card) -> Unit,
@@ -283,7 +281,6 @@ fun GameScreen(
             onSetNoTrumpsEnabled = onSetNoTrumpsEnabled,
             inGame = true,
             monetization = monetization,
-            activity = activity,
             onDismiss = { showSettings = false },
         )
     }
@@ -314,7 +311,7 @@ fun GameScreen(
                 // The game's only interstitial moment: once per finished game, on the way out (a
                 // no-op that exits immediately in FOSS builds, when ads are removed, or before
                 // consent).
-                monetization.maybeShowInterstitial(activity, onDismissed = onExit)
+                monetization.maybeShowInterstitial(onDismissed = onExit)
             },
         )
     }

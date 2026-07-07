@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 package io.github.rotundtapir.fivehundred.ui
 
-import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,7 +51,6 @@ fun SettingsDialog(
     onSetNoTrumpsEnabled: (Boolean) -> Unit,
     inGame: Boolean,
     monetization: Monetization,
-    activity: Activity,
     onDismiss: () -> Unit,
 ) {
     var showAcknowledgments by remember { mutableStateOf(false) }
@@ -157,7 +155,7 @@ fun SettingsDialog(
 
                 val adsRemoved by monetization.adsRemoved.collectAsState()
                 OutlinedButton(
-                    onClick = { monetization.launchRemoveAdsOrDonate(activity) },
+                    onClick = { monetization.launchRemoveAdsOrDonate() },
                     modifier = Modifier.fillMaxWidth().testTag("supportButton"),
                 ) {
                     Text(
@@ -173,7 +171,7 @@ fun SettingsDialog(
                 val privacyOptionsRequired by monetization.privacyOptionsRequired.collectAsState()
                 if (privacyOptionsRequired) {
                     OutlinedButton(
-                        onClick = { monetization.showPrivacyOptionsForm(activity) },
+                        onClick = { monetization.showPrivacyOptionsForm() },
                         modifier = Modifier.fillMaxWidth().testTag("privacyOptions"),
                     ) { Text("Privacy options") }
                 }
