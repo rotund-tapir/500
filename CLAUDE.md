@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-The Android app for the card game **500** (4-player Australian rules), and the first consumer of the
-shared **`cardkit`** library. `cardkit` lives in its own repo and is included here as a git submodule
-at `./cardkit`, wired into Gradle as a composite build. Only 500-specific code lives in this repo;
-game-agnostic infrastructure lives in `cardkit`.
+The Android **and web (Kotlin/Wasm)** app for the card game **500** (4-player Australian rules), and
+the first consumer of the shared **`cardkit`** library. `cardkit` lives in its own repo and is
+included here as a git submodule at `./cardkit`, wired into Gradle as a composite build. Only
+500-specific code lives in this repo; game-agnostic infrastructure lives in `cardkit`. The web build
+deploys to GitHub Pages (https://rotundtapir.github.io/500/) on `v*` release tags.
 
 ## Toolchain (read first — non-obvious and will waste time otherwise)
 
@@ -47,6 +48,12 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedFossDebugAndroidTest
 # CRITICAL F-Droid gate: the FOSS build must contain NO proprietary dependency.
 ./gradlew :app:dependencies --configuration fossDebugRuntimeClasspath \
   | grep -Ei 'gms|billing|firebase|monetization-play'   # must print nothing
+
+# Web (Kotlin/Wasm): dev server with live reload, and the static production site
+# (build/dist/wasmJs/productionExecutable — what the Pages deploy publishes).
+./gradlew :web:wasmJsBrowserRun          # http://localhost:8080
+./gradlew :web:wasmJsBrowserDistribution
+# Web analogue of the test intent extras: ?seed=42&animationSpeed=OFF&soundVolume=0
 ```
 
 Enable the pre-commit hook once per clone: `git config core.hooksPath scripts/hooks` (runs
@@ -55,12 +62,23 @@ Enable the pre-commit hook once per clone: `git config core.hooksPath scripts/ho
 ## Architecture
 
 ### Module layout (this repo + the submodule)
-- `cardkit/` (submodule) — reusable infra: `cardkit-core` (pure Kotlin), `cardkit-ui` (Compose),
-  `cardkit-monetization` (interface + FOSS no-op), `cardkit-monetization-play` (Google Ads + Billing).
-- `engine/` — pure-Kotlin 500 rules. **No Android imports** (it's a `kotlin("jvm")` module so a leak
-  won't compile). This keeps the authoritative engine runnable server-side for future online play.
-- `ai/` — heuristic bot, pure Kotlin, depends on `engine`.
-- `app/` — Jetpack Compose UI, depends on `engine` + `ai` + cardkit modules.
+Most modules are Kotlin Multiplatform; `wasmJs` is the browser target throughout.
+- `cardkit/` (submodule) — reusable infra: `cardkit-core` (pure Kotlin, jvm+wasmJs), `cardkit-ui`
+  (Compose Multiplatform, android+wasmJs), `cardkit-monetization` (interface + FOSS/browser no-ops),
+  `cardkit-monetization-play` (Google Ads + Billing, Android-only).
+- `engine/` — pure-Kotlin 500 rules, KMP jvm+wasmJs. **No Android or JVM-only imports** (the wasm
+  target won't compile a leak). This keeps the authoritative engine runnable server-side for future
+  online play. Unit tests live in `src/jvmTest`.
+- `ai/` — heuristic bot, pure Kotlin (KMP jvm+wasmJs), depends on `engine`.
+- `shared/` — the whole game UI (screens, `GameViewModel`, tutorial) as Compose Multiplatform common
+  code, android+wasmJs. Platform seams: `SettingsRepository` (interface; DataStore impl in its
+  androidMain, localStorage impl in `web/`) and `AppConfig`/`LocalAppConfig` (replaces BuildConfig
+  in shared code).
+- `app/` — the Android shell: `MainActivity` (intent-extra test overrides), flavors, monetization
+  providers. Depends on `shared`.
+- `web/` — the browser shell: `ComposeViewport` entry, URL-param test overrides,
+  `LocalStorageSettingsRepository`, `BrowserMonetization` wiring, and a DejaVu Sans symbol-subset
+  fallback font (the wasm canvas has no system fonts — without it, ♠♥♦♣/⇄/⚙ render as tofu).
 
 ### The engine is a pure state machine (the core idea)
 `FiveHundredRules : GameRules<GameState, Action, PlayerView>` (cardkit-core interface) — `apply(state,
@@ -138,13 +156,26 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
   extensions that take the condition instead — see `tutorialTarget(map-or-null, key)` and
   `tappableWhen(enabled) {}` in `GameScreen.kt`.
 
+### Web target notes
+- The Kotlin plugin's Node.js/Binaryen/Yarn download repositories are declared in
+  `settings.gradle.kts` (both builds) because `PREFER_SETTINGS` ignores project-level repositories.
+- Compose resource URLs are remapped relative (`configureWebResources` in `web/.../Main.kt`) so the
+  app works from the GitHub Pages `/500/` subpath — keep that if resources ever 404 on Pages.
+- `viewModel { GameViewModel() }` (explicit initializer) is required: the reflection-based default
+  ViewModel factory is JVM-only and throws on wasm.
+- Web-only known limits: page refresh loses an in-progress game (`rememberSaveable` is memory-only
+  on web) and the first sound needs a prior user gesture (browser autoplay policy — the "New Game"
+  tap qualifies).
+
 ## Releasing
 
 - Release artifacts are signed when `KEYSTORE_FILE`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`
   are set (env vars or gradle properties); absent ⇒ unsigned, which is correct for local builds and
   F-Droid. CI's tag-triggered release job (`v*` tags) exports them from repo secrets, builds
   `bundlePlayRelease` + `assembleFossRelease`, and publishes the FOSS APK to a GitHub release (the
-  job needs `permissions: contents: write`). `dependenciesInfo` is disabled — F-Droid rejects the
+  job needs `permissions: contents: write`). The same `v*` tags also trigger the `deploy-web` job,
+  which publishes the wasm build to GitHub Pages (source is set to "GitHub Actions" in repo
+  settings). `dependenciesInfo` is disabled — F-Droid rejects the
   Google-encrypted blob. Release stays un-minified until a release-QA pass justifies R8.
 - fastlane metadata (`fastlane/metadata/android/en-US/`) is the store listing: `title.txt`,
   descriptions, `changelogs/<versionCode>.txt`, and `images/phoneScreenshots/`. Keep the changelog

@@ -40,6 +40,9 @@ jobs:
       - name: Assemble both flavors (debug)
         run: ./gradlew assembleFossDebug assemblePlayDebug
 
+      - name: Build web distribution (wasmJs)
+        run: ./gradlew :web:wasmJsBrowserDistribution
+
       - name: Verify FOSS build has no proprietary deps
         run: |
           ./gradlew :app:dependencies --configuration fossReleaseRuntimeClasspath > foss-deps.txt
@@ -93,3 +96,44 @@ jobs:
           name: play-release-aab
           path: app/build/outputs/bundle/playRelease/*.aab
           if-no-files-found: error
+
+  # The playable web build (Kotlin/Wasm) goes to GitHub Pages on the same v* tags as the
+  # Android release, so the hosted game tracks releases rather than every push to main.
+  # One-time repo setting: Settings -> Pages -> Source = "GitHub Actions".
+  deploy-web:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write      # deploy to GitHub Pages
+      id-token: write   # OIDC token for the pages deployment
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      # settings.gradle.kts configures the Android modules even for :web tasks.
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build web distribution
+        run: ./gradlew :web:wasmJsBrowserDistribution
+
+      # Pages runs Jekyll by default, which drops files it doesn't understand.
+      - name: Disable Jekyll
+        run: touch web/build/dist/wasmJs/productionExecutable/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/build/dist/wasmJs/productionExecutable
+      - id: deployment
+        uses: actions/deploy-pages@v4
