@@ -12,9 +12,12 @@ test('seeded game: suit glyphs render, bidding works, a trick completes', async 
   await clickByRole(page, 'button', 'New Game');
 
   // Bid ladder for the fixture — the suit symbols come through the accessibility tree, which
-  // catches the missing-glyph (tofu) regression without a pixel diff.
-  await expect(page.getByRole('button', { name: '10♠' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('button', { name: '9♦' })).toBeVisible();
+  // catches the missing-glyph (tofu) regression without a pixel diff. The panel is a
+  // horizontally-scrolled Row of the legal bids, so higher bids can sit past the visible viewport;
+  // assert the glyphs are *attached* (present in the a11y tree) rather than visible, so the check
+  // stays robust to where the fixture's ladder happens to scroll.
+  await expect(page.getByRole('button', { name: '10♠' })).toBeAttached({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: '9♦' })).toBeAttached();
   await expect(page.getByText('high: 8♣')).toBeVisible();
 
   await clickByRole(page, 'button', 'Pass');
