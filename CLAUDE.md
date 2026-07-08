@@ -150,6 +150,8 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
 - New source files get the SPDX header:
   `// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception`
 - Commits require a DCO sign-off (`git commit -s`); no CLA.
+- Merge PRs by fast-forward (or GitHub's rebase merge when the branch is behind `main`) — keep
+  `main`'s history linear; no merge commits.
 - Namespace is `io.github.rotundtapir.*` (final — matches the `rotundtapir` GitHub account, which
   was renamed from `rotund-tapir` on 2026-07-06 precisely so the namespace is literally true).
   `applicationId` is `io.github.rotundtapir.fivehundred`.
