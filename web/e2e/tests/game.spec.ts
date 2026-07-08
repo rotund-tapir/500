@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { awaitAppBoot, clickByRole, collectErrors, FIXTURE } from './helpers';
 
-// The seed-42 fixture (same as GameFlowTest's): Thelma opens the auction at 9♣; passing hands her
+// The seed-42 fixture (same as GameFlowTest's): Thelma opens the auction at 8♣; passing hands her
 // the contract and play begins with clubs as trumps.
 test('seeded game: suit glyphs render, bidding works, a trick completes', async ({ page }) => {
   const errors = collectErrors(page);
@@ -15,12 +15,12 @@ test('seeded game: suit glyphs render, bidding works, a trick completes', async 
   // catches the missing-glyph (tofu) regression without a pixel diff.
   await expect(page.getByRole('button', { name: '10♠' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('button', { name: '9♦' })).toBeVisible();
-  await expect(page.getByText('high: 9♣')).toBeVisible();
+  await expect(page.getByText('high: 8♣')).toBeVisible();
 
   await clickByRole(page, 'button', 'Pass');
 
-  // Thelma converts her 9♣ into the contract; it's our lead into the first trick.
-  await expect(page.getByText('Contract: Thelma · 9♣')).toBeVisible({ timeout: 30_000 });
+  // Thelma converts her 8♣ into the contract; it's our lead into the first trick.
+  await expect(page.getByText('Contract: Thelma · 8♣')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Your turn — tap a card to play')).toBeVisible();
 
   // Follow trumps (Thelma led the Joker): play the Q♣ — playable cards surface as buttons in
