@@ -88,7 +88,7 @@ class FiveHundredBotTest {
         )
         val bid = bot.proposeBid(balanced, highBid = null)
         assertTrue(bid is Bid.Named, "expected a named bid, got $bid")
-        assertEquals(Trump.NO_TRUMP, (bid as Bid.Named).trump)
+        assertEquals(Trump.NO_TRUMP, bid.trump)
         assertTrue(bid.level >= 6)
     }
 
