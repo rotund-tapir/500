@@ -107,9 +107,10 @@ class FiveHundredBot(
         // Honours are near-sure winners; low trumps win about half the time, plus a length bonus for
         // a long suit (once trumps are drawn the small ones start to win). + 1 for the kitty.
         var tricks = honours + 0.5 * low + 0.5 * maxOf(0, trumps.size - 4) + 1.0
+        val bySuit = hand.filterIsInstance<SuitedCard>().groupBy { eval.effectiveSuit(it) }
         for (suit in Suit.entries) {
             if (trump.suit == suit) continue
-            val inSuit = hand.filterIsInstance<SuitedCard>().filter { eval.effectiveSuit(it) == suit }
+            val inSuit = bySuit[suit].orEmpty()
             if (inSuit.any { it.rank == Rank.ACE }) tricks += 0.9
             if (inSuit.any { it.rank == Rank.KING } && inSuit.size >= 2) tricks += 0.4
         }
@@ -123,8 +124,9 @@ class FiveHundredBot(
     private fun estimateNoTrumpTricks(hand: List<Card>): Double {
         var tricks = 1.0 // kitty
         if (hand.any { it is Joker }) tricks += 1.0
+        val bySuit = hand.filterIsInstance<SuitedCard>().groupBy { it.suit }
         for (suit in Suit.entries) {
-            val inSuit = hand.filterIsInstance<SuitedCard>().filter { it.suit == suit }
+            val inSuit = bySuit[suit].orEmpty()
             if (inSuit.isEmpty()) continue
             if (inSuit.any { it.rank == Rank.ACE }) tricks += 1.0
             if (inSuit.any { it.rank == Rank.KING } && inSuit.size >= 2) tricks += 0.5
@@ -232,8 +234,12 @@ class FiveHundredBot(
         }
     }
 
-    /** A context-free strength for keep/dump decisions: trumps rank above all side cards. */
+    /**
+     * A context-free strength for keep/dump decisions: trumps rank above all side cards
+     * (TrickEvaluator scores every trump at 100+, above any side card's rank ordinal; the led
+     * suit never affects a trump's strength).
+     */
     private fun rawStrength(card: Card, eval: TrickEvaluator): Int =
-        if (eval.isTrump(card)) maxOf(eval.strength(card, eval.trump.suit), 100)
+        if (eval.isTrump(card)) eval.strength(card, null)
         else (card as? SuitedCard)?.rank?.ordinal ?: 0
 }

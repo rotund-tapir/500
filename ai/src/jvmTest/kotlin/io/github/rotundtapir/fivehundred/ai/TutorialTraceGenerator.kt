@@ -20,7 +20,7 @@ import kotlin.test.Test
 
 /**
  * THROWAWAY GENERATOR — documents how the tutorial script in
- * `app/src/main/kotlin/io/github/rotundtapir/fivehundred/ui/Tutorial.kt` was produced.
+ * `shared/src/commonMain/kotlin/io/github/rotundtapir/fivehundred/ui/Tutorial.kt` was produced.
  *
  * It replays candidate seeds through the exact wiring `GameViewModel.newGame` uses
  * (FiveHundredRules(playerCount = 4) with default house rules, bots at seats 1..3 as
@@ -29,7 +29,7 @@ import kotlin.test.Test
  * and makes it. The winning seed's full trace is printed and written to `build/tutorial-trace.txt`.
  *
  * Re-enable (remove @Disabled) and run with:
- *   ./gradlew :ai:test --tests "*TutorialTraceGenerator*"
+ *   ./gradlew :ai:jvmTest --tests "*TutorialTraceGenerator*"
  */
 @org.junit.jupiter.api.Disabled("one-shot generator for the tutorial script; not a regression test")
 class TutorialTraceGenerator {
