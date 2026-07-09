@@ -570,7 +570,10 @@ private fun HandResultDialog(
     onDismissed: () -> Unit = {},
 ) {
     val result = view.lastHandResult ?: return
-    var dismissed by remember(view.lastHandResult) { mutableStateOf(false) }
+    // Keyed on the scored-hand COUNT, not the HandResult value: two consecutive hands can score
+    // structurally identically (same declarer, bid and tricks), and a value key would then never
+    // reset — the second dialog would never show and the acknowledgement gates would deadlock.
+    var dismissed by remember(view.handResults.size) { mutableStateOf(false) }
     if (dismissed) return
     val dismiss = {
         dismissed = true

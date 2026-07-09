@@ -39,8 +39,9 @@ fun GameSoundEffects(view: PlayerView?, volume: Float): (SoundEffect) -> Unit {
         if (view.trickNumber > prev.trickNumber) {
             manager.play(SoundEffect.TRICK_TAKEN)
         }
-        val result = view.lastHandResult
-        if (result != null && result != prev.lastHandResult) {
+        // By count, not by value: consecutive hands can score structurally identically, and a
+        // value comparison would silently swallow the second hand's score sound.
+        if (view.handResults.size > prev.handResults.size) {
             manager.play(SoundEffect.SCORE)
         }
     }
