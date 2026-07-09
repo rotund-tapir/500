@@ -135,7 +135,9 @@ fun GameScreen(
                 )
                 if (dealState.dealing) {
                     DealingHandRow(
-                        cards = if (sortHand) sortedForDisplay(view.hand, view.trump) else view.hand,
+                        cards = if (sortHand) {
+                            remember(view.hand, view.trump) { sortedForDisplay(view.hand, view.trump) }
+                        } else view.hand,
                         state = dealState,
                         humanSeat = view.seat,
                         timings = dealTimings(animationSpeed),

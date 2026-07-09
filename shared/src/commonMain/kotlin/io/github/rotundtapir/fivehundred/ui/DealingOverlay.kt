@@ -46,6 +46,7 @@ import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.ui.CardBack
 import io.github.rotundtapir.cardkit.ui.PlayingCard
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.engine.HAND_SIZE
 import io.github.rotundtapir.cardkit.ui.SoundEffect
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -62,10 +63,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * the bottom of the screen, then flip face up (with a small left-to-right stagger) when the deal
  * completes.
  *
- * Everything here is presentational: the engine has already dealt, and the ViewModel holds the
- * first bidder for `dealPauseMillis`, so the whole animation (flights + flip) must finish inside
- * that budget. At [AnimationSpeed.OFF] none of this runs and [DealAnimationState.stage] stays
- * [DealStage.DONE].
+ * Everything here is presentational: the engine has already dealt. The ViewModel releases the
+ * first bidder on the `dealAnimationDone` signal that GameScreen raises when this finishes; its
+ * `dealPauseMillis` (derived from [dealTimings]) only scales the deadlock backstop for the case
+ * where the signal never comes. At [AnimationSpeed.OFF] none of this runs and
+ * [DealAnimationState.stage] stays [DealStage.DONE].
  */
 internal enum class DealStage { SHUFFLING, DEALING, FLIPPING, DONE }
 
@@ -124,17 +126,24 @@ internal fun Modifier.dealAnchor(state: DealAnimationState, key: Any): Modifier 
 
 /**
  * Per-speed budgets. The flights self-correct against a deadline (frame quantisation would
- * otherwise accumulate), and flight + flip must total under the ViewModel's deal hold with
- * ~250ms slack: SLOW 5200 → 4200+690=4890, NORMAL 3500 → 2800+492=3292, FAST 1600 → 1100+275=1375.
- * Packet dealing means only 3×(players+1) flights (15 at four players), so each flight is long
- * enough to actually watch — ~180ms at Normal, ~280ms at Slow.
+ * otherwise accumulate). Packet dealing means only 3×(players+1) flights (15 at four players), so
+ * each flight is long enough to actually watch — ~180ms at Normal, ~280ms at Slow. The ViewModel
+ * derives its deadlock-backstop hold from these values, so retuning here needs no second edit.
  */
 internal data class DealTimings(
     val shuffleMillis: Long,
     val flyBudgetMillis: Long,
     val flipMillis: Int,
     val flipStaggerMillis: Int,
-)
+) {
+    /**
+     * The flip phase's full duration: the base flip plus FlippingCard's per-index stagger across
+     * the human's [HAND_SIZE] cards, plus a little slack.
+     */
+    val flipTotalMillis: Long get() = flipMillis + flipStaggerMillis * (HAND_SIZE - 1L) + FLIP_SLACK_MILLIS
+}
+
+private const val FLIP_SLACK_MILLIS = 30L
 
 internal fun dealTimings(speed: AnimationSpeed): DealTimings = when (speed) {
     AnimationSpeed.SLOW -> DealTimings(shuffleMillis = 1_600, flyBudgetMillis = 4_200, flipMillis = 300, flipStaggerMillis = 40)
@@ -190,7 +199,7 @@ internal suspend fun runDealAnimation(
             fly(DealTarget.Kitty, 1)
         }
         state.stage = DealStage.FLIPPING
-        delay(timings.flipMillis + timings.flipStaggerMillis * 9L + 30L)
+        delay(timings.flipTotalMillis)
     } finally {
         state.flyingTarget = null
         state.stage = DealStage.DONE

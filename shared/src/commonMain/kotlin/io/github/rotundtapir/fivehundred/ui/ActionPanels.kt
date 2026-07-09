@@ -259,7 +259,11 @@ private fun HumanHand(
                 style = MaterialTheme.typography.labelMedium,
             )
         }
-        val hand = if (sortHand) sortedForDisplay(view.hand, view.trump) else view.hand
+        // Memoized: HumanHand recomposes on every PlayerView emission, but the sort's inputs only
+        // change on a new hand, a play, or the trump being decided.
+        val hand = if (sortHand) {
+            remember(view.hand, view.trump) { sortedForDisplay(view.hand, view.trump) }
+        } else view.hand
         // Every card except the fan's last is mostly covered by its right neighbour: only the left
         // HAND_OVERLAP strip shows, so that's the rect the tutorial tail should point at.
         val lastCard = hand.lastOrNull()

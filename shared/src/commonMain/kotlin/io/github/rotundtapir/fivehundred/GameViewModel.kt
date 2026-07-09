@@ -17,6 +17,7 @@ import io.github.rotundtapir.fivehundred.engine.FiveHundredRules
 import io.github.rotundtapir.fivehundred.engine.GameState
 import io.github.rotundtapir.fivehundred.engine.Phase
 import io.github.rotundtapir.fivehundred.engine.PlayerView
+import io.github.rotundtapir.fivehundred.ui.dealTimings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -169,13 +170,14 @@ class GameViewModel : ViewModel() {
             inner.decide(view)
         }
 
-    /** Hold before the first bid of a hand — covers GameScreen's shuffle + deal animation. */
-    private fun dealPauseMillis(speed: AnimationSpeed): Long = when (speed) {
-        AnimationSpeed.SLOW -> 6800L
-        AnimationSpeed.NORMAL -> 4400L
-        AnimationSpeed.FAST -> 2000L
-        AnimationSpeed.OFF -> 0L
-    }
+    /**
+     * The full expected duration of GameScreen's shuffle + deal animation at [speed], derived from
+     * the same [dealTimings] table the animation runs on (plus slack for frame scheduling). Only
+     * used ×3 as the deadlock backstop above — the real release is the dealAnimationDone signal.
+     */
+    private fun dealPauseMillis(speed: AnimationSpeed): Long =
+        if (speed == AnimationSpeed.OFF) 0L
+        else dealTimings(speed).run { shuffleMillis + flyBudgetMillis + flipTotalMillis + PAUSE_SLACK_MILLIS }
 
     fun placeBid(bid: Bid) = submit(Action.PlaceBid(bid))
     fun discard(cards: List<Card>) = submit(Action.ExchangeKitty(cards))
@@ -188,6 +190,9 @@ class GameViewModel : ViewModel() {
     }
 
     private companion object {
+        /** Slack on top of the animation's own budget before the backstop is even eligible. */
+        const val PAUSE_SLACK_MILLIS = 250L
+
         /** Pool of friendly bot names; `playerCount - 1` distinct ones are drawn per game, seeded by the game seed. */
         val BOT_NAMES = listOf(
             "Alice", "Bruce", "Clancy", "Daisy", "Edna", "Frank", "Gus", "Hazel",
