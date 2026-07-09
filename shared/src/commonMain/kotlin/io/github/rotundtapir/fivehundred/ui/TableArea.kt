@@ -35,7 +35,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.core.Seat
+import io.github.rotundtapir.cardkit.ui.CardAspectRatio
 import io.github.rotundtapir.cardkit.ui.PlayingCard
+import io.github.rotundtapir.cardkit.ui.cardFaceShape
 import io.github.rotundtapir.fivehundred.AnimationSpeed
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.engine.KITTY_SIZE
@@ -368,14 +370,14 @@ private fun TrickPlaysRow(view: PlayerView, botNames: Map<Seat, String>, plays: 
 private fun EmptyTrickSlot(view: PlayerView, botNames: Map<Seat, String>, seat: Seat) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            // Mirrors PlayingCard's geometry at width 56.dp (height ×1.4, corner radius ×0.08)
-            // so the slot reserves exactly the space the card will take.
+            // Mirrors PlayingCard's geometry so the slot reserves exactly the space the card
+            // will take, staying in step if the card shape ever changes.
             modifier = Modifier
-                .size(56.dp, 56.dp * 1.4f)
+                .size(56.dp, 56.dp * CardAspectRatio)
                 .border(
                     1.dp,
                     MaterialTheme.colorScheme.onBackground.copy(alpha = 0.18f),
-                    RoundedCornerShape(56.dp * 0.08f),
+                    cardFaceShape(56.dp),
                 ),
         )
         Spacer(Modifier.height(4.dp))

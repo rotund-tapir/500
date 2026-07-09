@@ -40,7 +40,6 @@ import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.core.Suit
 import io.github.rotundtapir.cardkit.core.SuitedCard
 import io.github.rotundtapir.cardkit.ui.PlayingCard
-import io.github.rotundtapir.cardkit.ui.displayLabel
 import io.github.rotundtapir.fivehundred.engine.Phase
 import io.github.rotundtapir.fivehundred.engine.PlayerView
 import kotlin.math.roundToInt
@@ -81,7 +80,7 @@ internal fun TutorialBubble(
     val targetKey = when {
         !isHumanDecision -> "trick"
         step is TutorialStep.BidStep -> "action"
-        step is TutorialStep.PlayStep -> "card:${step.card.displayLabel}"
+        step is TutorialStep.PlayStep -> "card:${step.card.label}"
         else -> "action" // discard: sit above the whole panel (header anchor), tail at its centre
     }
     val tailDown = targetKey != "trick"

@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.core.Card
 import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.ui.CardHand
-import io.github.rotundtapir.cardkit.ui.displayLabel
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.engine.KITTY_SIZE
 import io.github.rotundtapir.fivehundred.engine.Phase
@@ -226,8 +225,8 @@ private fun DiscardPanel(
     )
 }
 
-/** Fan overlap: each card advances this fraction of a card width, so only that strip is visible. */
-private const val HAND_OVERLAP = 0.45f
+/** Fan exposure: each card advances this fraction of a card width, so only that strip is visible. */
+private const val HAND_EXPOSURE = 0.45f
 
 @Composable
 private fun HumanHand(
@@ -265,7 +264,7 @@ private fun HumanHand(
             remember(view.hand, view.trump) { sortedForDisplay(view.hand, view.trump) }
         } else view.hand
         // Every card except the fan's last is mostly covered by its right neighbour: only the left
-        // HAND_OVERLAP strip shows, so that's the rect the tutorial tail should point at.
+        // HAND_EXPOSURE strip shows, so that's the rect the tutorial tail should point at.
         val lastCard = hand.lastOrNull()
         // The fan is wider than the screen at this card size — scroll it horizontally.
         val scrollState = rememberScrollState()
@@ -291,7 +290,7 @@ private fun HumanHand(
             CardHand(
                 cards = hand,
                 cardWidth = 84.dp,
-                overlap = HAND_OVERLAP,
+                exposure = HAND_EXPOSURE,
                 playable = playable,
                 dimUnplayable = dimUnplayable,
                 selected = selected,
@@ -299,8 +298,8 @@ private fun HumanHand(
                 cardModifier = { card ->
                     Modifier.tutorialTarget(
                         targets,
-                        "card:${card.displayLabel}",
-                        widthFraction = if (card == lastCard) 1f else HAND_OVERLAP,
+                        "card:${card.label}",
+                        widthFraction = if (card == lastCard) 1f else HAND_EXPOSURE,
                     )
                 },
             )
