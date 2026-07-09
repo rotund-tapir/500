@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.fivehundred.online.OnlineViewModel
+import io.github.rotundtapir.fivehundred.ui.BotSetupScreen
 import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
 import io.github.rotundtapir.fivehundred.ui.HomeScreen
@@ -156,25 +157,29 @@ fun FiveHundredApp(
                 onTrickAcknowledge = vm::acknowledgeTrick,
                 soundHook = playSound,
             )
-            else -> HomeScreen(
-                monetization = monetization,
-                onNewGame = {
+            appScreen == AppScreen.BOT_SETUP.name -> BotSetupScreen(
+                mode = mode,
+                onModeChange = { modeName = it.name },
+                onStart = {
                     vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
                     tutorialActive = false
                     appScreen = AppScreen.GAME.name
                 },
+                onBack = { appScreen = AppScreen.HOME.name },
+            )
+            else -> HomeScreen(
+                monetization = monetization,
+                onPlayWithBots = { appScreen = AppScreen.BOT_SETUP.name },
                 onStartTutorial = startTutorial,
-                onPlayOnline = {
+                onPlayWithFriends = {
                     onlineVm.enter(serverUrl, appConfig.version, appConfig.platform)
                     appScreen = AppScreen.ONLINE.name
                 },
                 settings = settingsControls,
-                mode = mode,
-                onModeChange = { modeName = it.name },
             )
         }
     }
 }
 
 /** Top-level screens the app switches between. */
-private enum class AppScreen { HOME, GAME, ONLINE }
+private enum class AppScreen { HOME, BOT_SETUP, GAME, ONLINE }

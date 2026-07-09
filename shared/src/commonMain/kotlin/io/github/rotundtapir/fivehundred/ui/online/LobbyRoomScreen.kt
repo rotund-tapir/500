@@ -49,7 +49,9 @@ internal fun LobbyRoomScreen(
 ) {
     val isCreator = state.yourSeat == state.creatorSeat
     val presentHumans = state.seats.filter { it.connected }
-    val allReady = presentHumans.isNotEmpty() && presentHumans.all { it.ready }
+    // The host isn't part of the ready check — clicking Start is their readiness. Everyone else who
+    // is present must be ready first (a solo host can always start; empty seats become bots).
+    val guestsReady = presentHumans.filter { it.seat != state.creatorSeat }.all { it.ready }
     val myReady = state.seats.firstOrNull { it.seat == state.yourSeat }?.ready == true
     val teamCount = state.config.teamCount
     val finished = state.phase == RoomPhase.FINISHED
@@ -84,6 +86,7 @@ internal fun LobbyRoomScreen(
                     SeatRow(
                         info = info,
                         isYou = info.seat == state.yourSeat,
+                        isHost = info.seat == state.creatorSeat,
                         canClaim = !finished && !info.connected && state.yourSeat != null,
                         onClaim = { onPickSeat(info.seat) },
                     )
@@ -91,21 +94,22 @@ internal fun LobbyRoomScreen(
             }
 
             if (!finished) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Ready")
-                    Switch(checked = myReady, onCheckedChange = onSetReady, modifier = Modifier.testTag("readyToggle"))
-                }
                 if (isCreator) {
                     Button(
                         onClick = onStart,
-                        enabled = allReady,
+                        enabled = guestsReady,
                         modifier = Modifier.fillMaxWidth().testTag("startGame"),
                     ) { Text("Start (empty seats become bots)") }
                 } else {
+                    // Guests mark themselves ready; the host just clicks Start.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Ready")
+                        Switch(checked = myReady, onCheckedChange = onSetReady, modifier = Modifier.testTag("readyToggle"))
+                    }
                     Text("Waiting for the host to start…", style = MaterialTheme.typography.labelMedium)
                 }
             } else if (isCreator) {
@@ -127,7 +131,7 @@ internal fun LobbyRoomScreen(
 }
 
 @Composable
-private fun SeatRow(info: SeatInfo, isYou: Boolean, canClaim: Boolean, onClaim: () -> Unit) {
+private fun SeatRow(info: SeatInfo, isYou: Boolean, isHost: Boolean, canClaim: Boolean, onClaim: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -145,6 +149,9 @@ private fun SeatRow(info: SeatInfo, isYou: Boolean, canClaim: Boolean, onClaim: 
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)),
                     modifier = Modifier.testTag("claimSeat${info.seat.index}"),
                 ) { Text("Sit here") }
+                // The host has no ready state — clicking Start is their readiness — so their seat
+                // shows "Host" rather than a ready/not-ready status.
+                info.connected && isHost -> Text("Host", color = MaterialTheme.colorScheme.primary)
                 info.connected && info.ready -> Text("Ready", color = MaterialTheme.colorScheme.primary)
                 info.connected -> Text("Not ready", style = MaterialTheme.typography.labelMedium)
                 else -> Text("")

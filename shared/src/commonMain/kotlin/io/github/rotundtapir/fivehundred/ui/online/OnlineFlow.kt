@@ -24,7 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,6 +66,7 @@ fun OnlineFlow(
     val screen by vm.screen.collectAsState()
     val error by vm.errorMessage.collectAsState()
     val updateRequired by vm.updateRequired.collectAsState()
+    val pendingRejoin by vm.pendingRejoin.collectAsState()
 
     // Version gate is terminal — keep it modal. Everything else (stale/illegal/rate-limited) is a
     // brief, non-blocking banner so a rejected move never stalls the game behind a dialog.
@@ -73,6 +76,21 @@ fun OnlineFlow(
             title = { Text("Update required") },
             text = { Text(message) },
             confirmButton = { TextButton(onClick = onExit, modifier = Modifier.testTag("updateRequired")) { Text("OK") } },
+        )
+    }
+    // Reconnecting landed us back in a room we were in: ask before dropping the player into it, so
+    // returning to online mode doesn't silently resume a game they meant to step away from.
+    pendingRejoin?.let { resumed ->
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Rejoin your game?") },
+            text = { Text("You're still in game ${resumed.joinCode}. Rejoin it, or leave it for good?") },
+            confirmButton = {
+                TextButton(onClick = vm::confirmRejoin, modifier = Modifier.testTag("rejoinConfirm")) { Text("Rejoin") }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::abandonGame, modifier = Modifier.testTag("rejoinLeave")) { Text("Leave") }
+            },
         )
     }
     // In-game rejections (stale/illegal move) auto-dismiss so they never block the board. On the
@@ -194,13 +212,28 @@ private fun OnlineGame(
 @Composable
 private fun ConnectionBanner(vm: OnlineViewModel) {
     val connection by vm.connection.collectAsState()
-    if (connection == ConnectionState.CONNECTED) return
+    var everConnected by remember { mutableStateOf(false) }
+    var show by remember { mutableStateOf(false) }
+    // The normal initial connect is sub-second, so showing a banner the instant we're not-connected
+    // just flashes a scary red bar on every entry. Only surface one if we're *still* not connected
+    // after a short grace period; a fast (re)connect cancels this effect before it fires.
+    LaunchedEffect(connection) {
+        if (connection == ConnectionState.CONNECTED) {
+            everConnected = true
+            show = false
+        } else {
+            show = false
+            delay(CONNECT_GRACE_MILLIS)
+            show = true
+        }
+    }
+    if (!show) return
     Surface(
         color = Color(0xFFB00020),
         modifier = Modifier.fillMaxWidth().safeDrawingPadding().testTag("connectionBanner"),
     ) {
         Text(
-            "Reconnecting…",
+            if (everConnected) "Reconnecting…" else "Connecting…",
             color = Color.White,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.fillMaxWidth().padding(6.dp),
@@ -244,3 +277,7 @@ private fun WaitingBox(message: String) {
 }
 
 private const val ERROR_BANNER_MILLIS = 2800L
+
+// How long a socket may stay unconnected before the connection banner appears — long enough that the
+// normal fast (re)connect never flashes it, short enough to still flag a genuinely stalled connect.
+private const val CONNECT_GRACE_MILLIS = 1500L

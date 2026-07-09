@@ -22,7 +22,7 @@ test('connects to the server and creates a lobby', async ({ page }) => {
   await awaitAppBoot(page);
 
   // Home -> online entry (name prefilled from the URL param) -> create form.
-  await clickByRole(page, 'button', 'Play online');
+  await clickByRole(page, 'button', 'Play with friends');
   await clickByRole(page, 'button', 'Create a game');
 
   // Create the lobby with the default 4-player table. Exact match: a plain "Create" substring also
