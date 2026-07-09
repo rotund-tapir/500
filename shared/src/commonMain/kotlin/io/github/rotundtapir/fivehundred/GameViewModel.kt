@@ -189,11 +189,15 @@ class GameViewModel : ViewModel() {
         human.trySubmit(action)
     }
 
-    private companion object {
+    internal companion object {
         /** Slack on top of the animation's own budget before the backstop is even eligible. */
         const val PAUSE_SLACK_MILLIS = 250L
 
-        /** Pool of friendly bot names; `playerCount - 1` distinct ones are drawn per game, seeded by the game seed. */
+        /**
+         * Pool of friendly bot names; `playerCount - 1` distinct ones are drawn per game, seeded by
+         * the game seed. Internal so TutorialScriptTest can pin the tutorial's scripted names
+         * (ai's TutorialTraceGenerator keeps a copy it cannot import — that test is the drift gate).
+         */
         val BOT_NAMES = listOf(
             "Alice", "Bruce", "Clancy", "Daisy", "Edna", "Frank", "Gus", "Hazel",
             "Ivy", "Mabel", "Ned", "Olive", "Pearl", "Ray", "Thelma", "Wally",

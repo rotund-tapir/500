@@ -2,6 +2,8 @@
 package io.github.rotundtapir.fivehundred
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -12,9 +14,17 @@ import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-/** [SettingsRepository] backed by Jetpack DataStore — the Android implementation. */
-class DataStoreSettingsRepository(context: Context) : SettingsRepository {
-    private val dataStore = context.applicationContext.settingsDataStore
+/**
+ * [SettingsRepository] backed by Jetpack DataStore — the Android implementation.
+ *
+ * The primary constructor takes the [DataStore] directly so unit tests can supply one backed by a
+ * temp file; production code uses the [Context] constructor, which binds the app's store.
+ */
+class DataStoreSettingsRepository internal constructor(
+    private val dataStore: DataStore<Preferences>,
+) : SettingsRepository {
+
+    constructor(context: Context) : this(context.applicationContext.settingsDataStore)
 
     override val animationSpeed: Flow<AnimationSpeed> = dataStore.data.map { preferences ->
         AnimationSpeed.fromName(preferences[ANIMATION_SPEED_KEY]) ?: SettingsDefaults.ANIMATION_SPEED

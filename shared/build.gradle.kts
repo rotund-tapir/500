@@ -39,6 +39,12 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.datastore.preferences)
         }
+        // Local JVM unit tests against the android target (no emulator): GameViewModel, the
+        // tutorial-script gate, and settings logic use no Android framework APIs.
+        androidUnitTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
 

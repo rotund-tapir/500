@@ -32,20 +32,22 @@ fun GameSoundEffects(view: PlayerView?, volume: Float): (SoundEffect) -> Unit {
     LaunchedEffect(view) {
         val prev = previous
         previous = view
-        if (view == null || prev == null) return@LaunchedEffect
-        if (view.currentTrick.size > prev.currentTrick.size) {
-            manager.play(SoundEffect.CARD_PLACE)
-        }
-        if (view.trickNumber > prev.trickNumber) {
-            manager.play(SoundEffect.TRICK_TAKEN)
-        }
-        // By count, not by value: consecutive hands can score structurally identically, and a
-        // value comparison would silently swallow the second hand's score sound.
-        if (view.handResults.size > prev.handResults.size) {
-            manager.play(SoundEffect.SCORE)
-        }
+        soundEffectsFor(prev, view).forEach(manager::play)
     }
 
     // Shared with imperative call sites (the dealing animation's soundHook).
     return remember(manager) { { effect: SoundEffect -> manager.play(effect) } }
+}
+
+/**
+ * The effects a [prev]-to-[next] view transition should trigger, as pure logic so the trigger
+ * rules are unit-testable. A null on either side (before the first view) triggers nothing.
+ */
+internal fun soundEffectsFor(prev: PlayerView?, next: PlayerView?): List<SoundEffect> = buildList {
+    if (prev == null || next == null) return@buildList
+    if (next.currentTrick.size > prev.currentTrick.size) add(SoundEffect.CARD_PLACE)
+    if (next.trickNumber > prev.trickNumber) add(SoundEffect.TRICK_TAKEN)
+    // By count, not by value: consecutive hands can score structurally identically, and a value
+    // comparison would silently swallow the second hand's score sound.
+    if (next.handResults.size > prev.handResults.size) add(SoundEffect.SCORE)
 }
