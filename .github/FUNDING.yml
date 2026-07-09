@@ -1,2 +1,3 @@
 # GitHub renders a Sponsor button; F-Droid parses this into Donate:/Liberapay: metadata.
+# Mirrors ProjectLinks.DONATION_URL (shared commonMain) — keep the two in step.
 liberapay: rotund-tapir

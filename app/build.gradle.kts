@@ -35,6 +35,7 @@ android {
         create("foss") {
             dimension = "distribution"
             // Feedback goes to the public issue tracker — F-Droid users have GitHub, not Play.
+            // Mirrors ProjectLinks.ISSUE_TRACKER (shared commonMain) — Gradle cannot read it.
             buildConfigField("String", "FEEDBACK_URI", "\"https://github.com/rotundtapir/500/issues\"")
         }
         create("play") {

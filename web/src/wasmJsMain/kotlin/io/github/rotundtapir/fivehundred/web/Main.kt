@@ -17,6 +17,7 @@ import io.github.rotundtapir.cardkit.ui.theme.CardkitTheme
 import io.github.rotundtapir.fivehundred.AnimationSpeed
 import io.github.rotundtapir.fivehundred.AppConfig
 import io.github.rotundtapir.fivehundred.FiveHundredApp
+import io.github.rotundtapir.fivehundred.ProjectLinks
 import io.github.rotundtapir.fivehundred.web.generated.resources.Res
 import io.github.rotundtapir.fivehundred.web.generated.resources.symbol_fallback
 import kotlin.random.Random
@@ -27,10 +28,6 @@ import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.configureWebResources
 import org.jetbrains.compose.resources.preloadFont
 import org.w3c.dom.url.URLSearchParams
-
-// Kept in sync with the Android FOSS flavor (MonetizationProvider / .github/FUNDING.yml).
-private const val DONATION_URL = "https://liberapay.com/rotund-tapir"
-private const val FEEDBACK_URI = "https://github.com/rotundtapir/500/issues"
 
 /**
  * Browser entry point. URL query parameters mirror MainActivity's test-override intent extras:
@@ -80,9 +77,9 @@ fun main() {
                 // startup so the first deal doesn't show blank backs/faces while PNGs stream in.
                 CardArtWarmup()
                 FiveHundredApp(
-                    monetization = remember { BrowserMonetization(DONATION_URL) },
+                    monetization = remember { BrowserMonetization(ProjectLinks.DONATION_URL) },
                     settings = remember { LocalStorageSettingsRepository() },
-                    appConfig = AppConfig(feedbackUri = FEEDBACK_URI),
+                    appConfig = AppConfig(feedbackUri = ProjectLinks.ISSUE_TRACKER),
                     nextSeed = { seedOverride ?: Random.nextLong() },
                     animationSpeedOverride = animationSpeedOverride,
                     soundVolumeOverride = soundVolumeOverride,
