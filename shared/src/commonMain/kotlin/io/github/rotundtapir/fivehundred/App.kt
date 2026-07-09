@@ -15,6 +15,7 @@ import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
 import io.github.rotundtapir.fivehundred.ui.HomeScreen
+import io.github.rotundtapir.fivehundred.ui.SettingsControls
 import io.github.rotundtapir.fivehundred.ui.TUTORIAL_SEED
 import io.github.rotundtapir.fivehundred.ui.TutorialScriptState
 import kotlinx.coroutines.launch
@@ -43,37 +44,34 @@ fun FiveHundredApp(
     val view by vm.humanView.collectAsState()
     val botNames by vm.botNames.collectAsState()
 
-    val persistedSpeed by settings.animationSpeed.collectAsState(initial = AnimationSpeed.NORMAL)
+    val persistedSpeed by settings.animationSpeed.collectAsState(initial = SettingsDefaults.ANIMATION_SPEED)
     val animationSpeed = animationSpeedOverride ?: persistedSpeed
-    val sortByDefault by settings.sortHandByDefault.collectAsState(initial = false)
+    val sortByDefault by settings.sortHandByDefault.collectAsState(initial = SettingsDefaults.SORT_HAND_BY_DEFAULT)
     LaunchedEffect(animationSpeed) { vm.animationSpeed.value = animationSpeed }
     val scope = rememberCoroutineScope()
-    val cycleAnimationSpeed: () -> Unit = {
-        scope.launch { settings.setAnimationSpeed(animationSpeed.next()) }
-    }
-    val setSortByDefault: (Boolean) -> Unit = { value ->
-        scope.launch { settings.setSortHandByDefault(value) }
-    }
-    val misereEnabled by settings.misereEnabled.collectAsState(initial = true)
-    val noTrumpsEnabled by settings.noTrumpsEnabled.collectAsState(initial = true)
-    val setMisereEnabled: (Boolean) -> Unit = { value ->
-        scope.launch { settings.setMisereEnabled(value) }
-    }
-    val setNoTrumpsEnabled: (Boolean) -> Unit = { value ->
-        scope.launch { settings.setNoTrumpsEnabled(value) }
-    }
-    val persistedVolume by settings.soundVolume.collectAsState(initial = 0.7f)
+    val misereEnabled by settings.misereEnabled.collectAsState(initial = SettingsDefaults.MISERE_ENABLED)
+    val noTrumpsEnabled by settings.noTrumpsEnabled.collectAsState(initial = SettingsDefaults.NO_TRUMPS_ENABLED)
+    val persistedVolume by settings.soundVolume.collectAsState(initial = SettingsDefaults.SOUND_VOLUME)
     val soundVolume = soundVolumeOverride ?: persistedVolume
-    val setSoundVolume: (Float) -> Unit = { value ->
-        scope.launch { settings.setSoundVolume(value) }
-    }
     // One sound engine for the whole app: reacts to game-state transitions, and hands back a play
     // function that the dealing animation's sound hook uses for shuffle/deal effects.
     val playSound = GameSoundEffects(view = view, volume = soundVolume)
-    val holdTricks by settings.holdTricks.collectAsState(initial = false)
-    val setHoldTricks: (Boolean) -> Unit = { value ->
-        scope.launch { settings.setHoldTricks(value) }
-    }
+    val holdTricks by settings.holdTricks.collectAsState(initial = SettingsDefaults.HOLD_TRICKS)
+    // Current values + write-through callbacks as one unit, for the screens' shared settings dialog.
+    val settingsControls = SettingsControls(
+        animationSpeed = animationSpeed,
+        onCycleAnimationSpeed = { scope.launch { settings.setAnimationSpeed(animationSpeed.next()) } },
+        sortByDefault = sortByDefault,
+        onSetSortByDefault = { value -> scope.launch { settings.setSortHandByDefault(value) } },
+        holdTricks = holdTricks,
+        onSetHoldTricks = { value -> scope.launch { settings.setHoldTricks(value) } },
+        soundVolume = soundVolume,
+        onSetSoundVolume = { value -> scope.launch { settings.setSoundVolume(value) } },
+        misereEnabled = misereEnabled,
+        onSetMisereEnabled = { value -> scope.launch { settings.setMisereEnabled(value) } },
+        noTrumpsEnabled = noTrumpsEnabled,
+        onSetNoTrumpsEnabled = { value -> scope.launch { settings.setNoTrumpsEnabled(value) } },
+    )
     // Stored by name so rememberSaveable needs no custom Saver.
     var modeName by rememberSaveable { mutableStateOf(GameMode.FOUR_PLAYER.name) }
     val mode = GameMode.valueOf(modeName)
@@ -95,7 +93,10 @@ fun FiveHundredApp(
     }
 
     CompositionLocalProvider(LocalAppConfig provides appConfig) {
-        if (!inGame) {
+        // A single HomeScreen call also covers the first frame after newGame() (inGame set, view
+        // still null), so its internal state survives the transition instead of being rebuilt.
+        val current = view
+        if (!inGame || current == null) {
             HomeScreen(
                 monetization = monetization,
                 onNewGame = {
@@ -104,79 +105,31 @@ fun FiveHundredApp(
                     inGame = true
                 },
                 onStartTutorial = startTutorial,
-                animationSpeed = animationSpeed,
-                onCycleAnimationSpeed = cycleAnimationSpeed,
-                sortByDefault = sortByDefault,
-                onSetSortByDefault = setSortByDefault,
-                holdTricks = holdTricks,
-                onSetHoldTricks = setHoldTricks,
-                soundVolume = soundVolume,
-                onSetSoundVolume = setSoundVolume,
-                misereEnabled = misereEnabled,
-                onSetMisereEnabled = setMisereEnabled,
-                noTrumpsEnabled = noTrumpsEnabled,
-                onSetNoTrumpsEnabled = setNoTrumpsEnabled,
+                settings = settingsControls,
                 mode = mode,
                 onModeChange = { modeName = it.name },
             )
         } else {
-            val current = view
-            if (current == null) {
-                HomeScreen(
-                    monetization = monetization,
-                    onNewGame = {
-                        vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
-                        tutorialActive = false
-                    },
-                    onStartTutorial = startTutorial,
-                    animationSpeed = animationSpeed,
-                    onCycleAnimationSpeed = cycleAnimationSpeed,
-                    sortByDefault = sortByDefault,
-                    onSetSortByDefault = setSortByDefault,
-                    holdTricks = holdTricks,
-                    onSetHoldTricks = setHoldTricks,
-                    soundVolume = soundVolume,
-                    onSetSoundVolume = setSoundVolume,
-                    misereEnabled = misereEnabled,
-                    onSetMisereEnabled = setMisereEnabled,
-                    noTrumpsEnabled = noTrumpsEnabled,
-                    onSetNoTrumpsEnabled = setNoTrumpsEnabled,
-                    mode = mode,
-                    onModeChange = { modeName = it.name },
-                )
-            } else {
-                GameScreen(
-                    view = current,
-                    botNames = botNames,
-                    animationSpeed = animationSpeed,
-                    defaultSortHand = sortByDefault,
-                    monetization = monetization,
-                    onBid = vm::placeBid,
-                    onDiscard = vm::discard,
-                    onPlay = { card -> vm.playCard(card) },
-                    onExit = {
-                        inGame = false
-                        tutorialActive = false
-                    },
-                    tutorial = if (tutorialActive) {
-                        TutorialScriptState(tutorialStepIndex) { tutorialStepIndex++ }
-                    } else null,
-                    onResultDismissed = vm::acknowledgeHandResult,
-                    onDealAnimationFinished = vm::dealAnimationFinished,
-                    holdTricks = holdTricks,
-                    onSetHoldTricks = setHoldTricks,
-                    onTrickAcknowledged = vm::acknowledgeTrick,
-                    soundHook = playSound,
-                    onCycleAnimationSpeed = cycleAnimationSpeed,
-                    onSetSortByDefault = setSortByDefault,
-                    soundVolume = soundVolume,
-                    onSetSoundVolume = setSoundVolume,
-                    misereEnabled = misereEnabled,
-                    onSetMisereEnabled = setMisereEnabled,
-                    noTrumpsEnabled = noTrumpsEnabled,
-                    onSetNoTrumpsEnabled = setNoTrumpsEnabled,
-                )
-            }
+            GameScreen(
+                view = current,
+                botNames = botNames,
+                settings = settingsControls,
+                monetization = monetization,
+                onBid = vm::placeBid,
+                onDiscard = vm::discard,
+                onPlay = { card -> vm.playCard(card) },
+                onExit = {
+                    inGame = false
+                    tutorialActive = false
+                },
+                tutorial = if (tutorialActive) {
+                    TutorialScriptState(tutorialStepIndex) { tutorialStepIndex++ }
+                } else null,
+                onResultDismissed = vm::acknowledgeHandResult,
+                onDealAnimationFinished = vm::dealAnimationFinished,
+                onTrickAcknowledged = vm::acknowledgeTrick,
+                soundHook = playSound,
+            )
         }
     }
 }

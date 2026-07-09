@@ -2,6 +2,8 @@
 package io.github.rotundtapir.fivehundred.web
 
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.SettingsDefaults
+import io.github.rotundtapir.fivehundred.SettingsKeys
 import io.github.rotundtapir.fivehundred.SettingsRepository
 import kotlinx.browser.localStorage
 import kotlinx.coroutines.flow.Flow
@@ -9,7 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * [SettingsRepository] backed by the browser's `localStorage`. Each setting is one
- * `settings.<key>` entry, using the same key names as the Android DataStore implementation.
+ * `settings.<key>` entry under the shared [SettingsKeys] names (byte-identical to the Android
+ * DataStore implementation, per that object's contract).
  * Values live in a per-setting [MutableStateFlow] seeded from storage, so reads are synchronous
  * and the Flow surface behaves like DataStore's.
  */
@@ -22,64 +25,53 @@ class LocalStorageSettingsRepository : SettingsRepository {
     }
 
     private val animationSpeedFlow = MutableStateFlow(
-        stored(ANIMATION_SPEED_KEY)
-            ?.let { stored -> AnimationSpeed.entries.find { it.name == stored } }
-            ?: AnimationSpeed.NORMAL,
+        AnimationSpeed.fromName(stored(SettingsKeys.ANIMATION_SPEED)) ?: SettingsDefaults.ANIMATION_SPEED,
     )
     override val animationSpeed: Flow<AnimationSpeed> = animationSpeedFlow
 
     override suspend fun setAnimationSpeed(speed: AnimationSpeed) {
-        store(ANIMATION_SPEED_KEY, speed.name)
+        store(SettingsKeys.ANIMATION_SPEED, speed.name)
         animationSpeedFlow.value = speed
     }
 
-    private val sortHandByDefaultFlow = MutableStateFlow(stored(SORT_HAND_BY_DEFAULT_KEY)?.toBoolean() ?: false)
+    private val sortHandByDefaultFlow = MutableStateFlow(stored(SettingsKeys.SORT_HAND_BY_DEFAULT)?.toBoolean() ?: SettingsDefaults.SORT_HAND_BY_DEFAULT)
     override val sortHandByDefault: Flow<Boolean> = sortHandByDefaultFlow
 
     override suspend fun setSortHandByDefault(value: Boolean) {
-        store(SORT_HAND_BY_DEFAULT_KEY, value.toString())
+        store(SettingsKeys.SORT_HAND_BY_DEFAULT, value.toString())
         sortHandByDefaultFlow.value = value
     }
 
-    private val misereEnabledFlow = MutableStateFlow(stored(MISERE_ENABLED_KEY)?.toBoolean() ?: true)
+    private val misereEnabledFlow = MutableStateFlow(stored(SettingsKeys.MISERE_ENABLED)?.toBoolean() ?: SettingsDefaults.MISERE_ENABLED)
     override val misereEnabled: Flow<Boolean> = misereEnabledFlow
 
     override suspend fun setMisereEnabled(value: Boolean) {
-        store(MISERE_ENABLED_KEY, value.toString())
+        store(SettingsKeys.MISERE_ENABLED, value.toString())
         misereEnabledFlow.value = value
     }
 
-    private val noTrumpsEnabledFlow = MutableStateFlow(stored(NO_TRUMPS_ENABLED_KEY)?.toBoolean() ?: true)
+    private val noTrumpsEnabledFlow = MutableStateFlow(stored(SettingsKeys.NO_TRUMPS_ENABLED)?.toBoolean() ?: SettingsDefaults.NO_TRUMPS_ENABLED)
     override val noTrumpsEnabled: Flow<Boolean> = noTrumpsEnabledFlow
 
     override suspend fun setNoTrumpsEnabled(value: Boolean) {
-        store(NO_TRUMPS_ENABLED_KEY, value.toString())
+        store(SettingsKeys.NO_TRUMPS_ENABLED, value.toString())
         noTrumpsEnabledFlow.value = value
     }
 
-    private val holdTricksFlow = MutableStateFlow(stored(HOLD_TRICKS_KEY)?.toBoolean() ?: false)
+    private val holdTricksFlow = MutableStateFlow(stored(SettingsKeys.HOLD_TRICKS)?.toBoolean() ?: SettingsDefaults.HOLD_TRICKS)
     override val holdTricks: Flow<Boolean> = holdTricksFlow
 
     override suspend fun setHoldTricks(value: Boolean) {
-        store(HOLD_TRICKS_KEY, value.toString())
+        store(SettingsKeys.HOLD_TRICKS, value.toString())
         holdTricksFlow.value = value
     }
 
-    private val soundVolumeFlow = MutableStateFlow((stored(SOUND_VOLUME_KEY)?.toFloatOrNull() ?: 0.7f).coerceIn(0f, 1f))
+    private val soundVolumeFlow = MutableStateFlow((stored(SettingsKeys.SOUND_VOLUME)?.toFloatOrNull() ?: SettingsDefaults.SOUND_VOLUME).coerceIn(0f, 1f))
     override val soundVolume: Flow<Float> = soundVolumeFlow
 
     override suspend fun setSoundVolume(value: Float) {
         val coerced = value.coerceIn(0f, 1f)
-        store(SOUND_VOLUME_KEY, coerced.toString())
+        store(SettingsKeys.SOUND_VOLUME, coerced.toString())
         soundVolumeFlow.value = coerced
-    }
-
-    private companion object {
-        const val ANIMATION_SPEED_KEY = "animation_speed"
-        const val SORT_HAND_BY_DEFAULT_KEY = "sort_hand_by_default"
-        const val MISERE_ENABLED_KEY = "misere_enabled"
-        const val NO_TRUMPS_ENABLED_KEY = "no_trumps_enabled"
-        const val HOLD_TRICKS_KEY = "hold_tricks"
-        const val SOUND_VOLUME_KEY = "sound_volume"
     }
 }

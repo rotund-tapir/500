@@ -12,39 +12,74 @@ enum class AnimationSpeed(val label: String, val botDelayMillis: Long) {
 
     /** The next speed in the cycle Slow → Normal → Fast → Off → Slow. */
     fun next(): AnimationSpeed = entries[(ordinal + 1) % entries.size]
+
+    companion object {
+        /**
+         * Lenient parse for persisted values and test overrides (intent extras, URL parameters):
+         * the matching entry, or null when [name] is unset or unrecognised.
+         */
+        fun fromName(name: String?): AnimationSpeed? = entries.find { it.name == name }
+    }
+}
+
+/**
+ * Storage key names, shared byte-for-byte by the DataStore (Android) and localStorage (web)
+ * backends. Renaming one orphans every user's saved value for that setting on that platform.
+ */
+object SettingsKeys {
+    const val ANIMATION_SPEED = "animation_speed"
+    const val SORT_HAND_BY_DEFAULT = "sort_hand_by_default"
+    const val MISERE_ENABLED = "misere_enabled"
+    const val NO_TRUMPS_ENABLED = "no_trumps_enabled"
+    const val HOLD_TRICKS = "hold_tricks"
+    const val SOUND_VOLUME = "sound_volume"
+}
+
+/**
+ * Each setting's value when nothing is stored — the single source for both platform backends and
+ * for the UI's pre-load `collectAsState` initial values.
+ */
+object SettingsDefaults {
+    val ANIMATION_SPEED = AnimationSpeed.NORMAL
+    const val SORT_HAND_BY_DEFAULT = false
+    const val MISERE_ENABLED = true
+    const val NO_TRUMPS_ENABLED = true
+    const val HOLD_TRICKS = false
+    const val SOUND_VOLUME = 0.7f
 }
 
 /**
  * Persisted user preferences. Backed per platform: Jetpack DataStore on Android
- * ([DataStoreSettingsRepository]), `localStorage` in the browser build.
+ * ([DataStoreSettingsRepository]), `localStorage` in the browser build. Both backends store under
+ * [SettingsKeys] and fall back to [SettingsDefaults] when a value is unset.
  */
 interface SettingsRepository {
-    /** The persisted animation speed; [AnimationSpeed.NORMAL] when unset or unrecognised. */
+    /** The persisted animation speed; [SettingsDefaults.ANIMATION_SPEED] when unset or unrecognised. */
     val animationSpeed: Flow<AnimationSpeed>
 
     suspend fun setAnimationSpeed(speed: AnimationSpeed)
 
-    /** Whether new hands start sorted; false (deal order) when unset. */
+    /** Whether new hands start sorted; [SettingsDefaults.SORT_HAND_BY_DEFAULT] (deal order) when unset. */
     val sortHandByDefault: Flow<Boolean>
 
     suspend fun setSortHandByDefault(value: Boolean)
 
-    /** House rule: whether Misère / Open Misère may be bid. Applies to new games; true when unset. */
+    /** House rule: whether Misère / Open Misère may be bid. Applies to new games. */
     val misereEnabled: Flow<Boolean>
 
     suspend fun setMisereEnabled(value: Boolean)
 
-    /** House rule: whether no-trump contracts may be bid. Applies to new games; true when unset. */
+    /** House rule: whether no-trump contracts may be bid. Applies to new games. */
     val noTrumpsEnabled: Flow<Boolean>
 
     suspend fun setNoTrumpsEnabled(value: Boolean)
 
-    /** Whether completed tricks stay on the felt until tapped away; false when unset. */
+    /** Whether completed tricks stay on the felt until tapped away. */
     val holdTricks: Flow<Boolean>
 
     suspend fun setHoldTricks(value: Boolean)
 
-    /** Sound-effect volume, 0f (muted) to 1f; 0.7f when unset. */
+    /** Sound-effect volume, 0f (muted) to 1f; [SettingsDefaults.SOUND_VOLUME] when unset. */
     val soundVolume: Flow<Float>
 
     suspend fun setSoundVolume(value: Float)

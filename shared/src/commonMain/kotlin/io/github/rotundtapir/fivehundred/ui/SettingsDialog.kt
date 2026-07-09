@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.monetization.Monetization
-import io.github.rotundtapir.fivehundred.AnimationSpeed
 import io.github.rotundtapir.fivehundred.LocalAppConfig
 
 private const val CARD_ART_URL = "https://code.google.com/archive/p/vector-playing-cards/"
@@ -37,18 +36,7 @@ private const val CARD_ART_URL = "https://code.google.com/archive/p/vector-playi
  */
 @Composable
 fun SettingsDialog(
-    animationSpeed: AnimationSpeed,
-    onCycleAnimationSpeed: () -> Unit,
-    sortByDefault: Boolean,
-    onSetSortByDefault: (Boolean) -> Unit,
-    holdTricks: Boolean,
-    onSetHoldTricks: (Boolean) -> Unit,
-    soundVolume: Float,
-    onSetSoundVolume: (Float) -> Unit,
-    misereEnabled: Boolean,
-    onSetMisereEnabled: (Boolean) -> Unit,
-    noTrumpsEnabled: Boolean,
-    onSetNoTrumpsEnabled: (Boolean) -> Unit,
+    settings: SettingsControls,
     inGame: Boolean,
     monetization: Monetization,
     onDismiss: () -> Unit,
@@ -76,9 +64,9 @@ fun SettingsDialog(
                 ) {
                     Text("Animations")
                     OutlinedButton(
-                        onClick = onCycleAnimationSpeed,
+                        onClick = settings.onCycleAnimationSpeed,
                         modifier = Modifier.testTag("animationSpeed"),
-                    ) { Text(animationSpeed.label) }
+                    ) { Text(settings.animationSpeed.label) }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -87,8 +75,8 @@ fun SettingsDialog(
                 ) {
                     Text("Sort hand by default")
                     Switch(
-                        checked = sortByDefault,
-                        onCheckedChange = onSetSortByDefault,
+                        checked = settings.sortByDefault,
+                        onCheckedChange = settings.onSetSortByDefault,
                         modifier = Modifier.testTag("sortDefault"),
                     )
                 }
@@ -99,8 +87,8 @@ fun SettingsDialog(
                 ) {
                     Text("Hold completed tricks")
                     Switch(
-                        checked = holdTricks,
-                        onCheckedChange = onSetHoldTricks,
+                        checked = settings.holdTricks,
+                        onCheckedChange = settings.onSetHoldTricks,
                         modifier = Modifier.testTag("holdTricks"),
                     )
                 }
@@ -111,8 +99,8 @@ fun SettingsDialog(
                 ) {
                     Text("Sound volume")
                     Slider(
-                        value = soundVolume,
-                        onValueChange = onSetSoundVolume,
+                        value = settings.soundVolume,
+                        onValueChange = settings.onSetSoundVolume,
                         valueRange = 0f..1f,
                         modifier = Modifier.weight(1f).testTag("volumeSlider"),
                     )
@@ -131,8 +119,8 @@ fun SettingsDialog(
                 ) {
                     Text("Misère bids", color = houseRuleColor)
                     Switch(
-                        checked = misereEnabled,
-                        onCheckedChange = onSetMisereEnabled,
+                        checked = settings.misereEnabled,
+                        onCheckedChange = settings.onSetMisereEnabled,
                         enabled = !inGame,
                         modifier = Modifier.testTag("misereEnabled"),
                     )
@@ -144,8 +132,8 @@ fun SettingsDialog(
                 ) {
                     Text("No-trump bids", color = houseRuleColor)
                     Switch(
-                        checked = noTrumpsEnabled,
-                        onCheckedChange = onSetNoTrumpsEnabled,
+                        checked = settings.noTrumpsEnabled,
+                        onCheckedChange = settings.onSetNoTrumpsEnabled,
                         enabled = !inGame,
                         modifier = Modifier.testTag("noTrumpsEnabled"),
                     )

@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.rotundtapir.cardkit.monetization.Monetization
-import io.github.rotundtapir.fivehundred.AnimationSpeed
 
 /**
  * A game mode the home screen offers: a table size plus its team structure. [players] and [teams]
@@ -58,18 +57,7 @@ fun HomeScreen(
     monetization: Monetization,
     onNewGame: () -> Unit,
     onStartTutorial: () -> Unit,
-    animationSpeed: AnimationSpeed,
-    onCycleAnimationSpeed: () -> Unit,
-    sortByDefault: Boolean,
-    onSetSortByDefault: (Boolean) -> Unit,
-    holdTricks: Boolean,
-    onSetHoldTricks: (Boolean) -> Unit,
-    soundVolume: Float,
-    onSetSoundVolume: (Float) -> Unit,
-    misereEnabled: Boolean,
-    onSetMisereEnabled: (Boolean) -> Unit,
-    noTrumpsEnabled: Boolean,
-    onSetNoTrumpsEnabled: (Boolean) -> Unit,
+    settings: SettingsControls,
     mode: GameMode,
     onModeChange: (GameMode) -> Unit,
 ) {
@@ -159,18 +147,7 @@ fun HomeScreen(
     }
     if (showSettings) {
         SettingsDialog(
-            animationSpeed = animationSpeed,
-            onCycleAnimationSpeed = onCycleAnimationSpeed,
-            sortByDefault = sortByDefault,
-            onSetSortByDefault = onSetSortByDefault,
-            holdTricks = holdTricks,
-            onSetHoldTricks = onSetHoldTricks,
-            soundVolume = soundVolume,
-            onSetSoundVolume = onSetSoundVolume,
-            misereEnabled = misereEnabled,
-            onSetMisereEnabled = onSetMisereEnabled,
-            noTrumpsEnabled = noTrumpsEnabled,
-            onSetNoTrumpsEnabled = onSetNoTrumpsEnabled,
+            settings = settings,
             inGame = false,
             monetization = monetization,
             onDismiss = { showSettings = false },

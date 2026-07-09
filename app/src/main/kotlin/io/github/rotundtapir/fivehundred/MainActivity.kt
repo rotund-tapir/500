@@ -35,8 +35,7 @@ class MainActivity : ComponentActivity() {
 
     /** The animation speed forced by the launching intent, or null to use the persisted setting. */
     private fun animationSpeedOverride(): AnimationSpeed? =
-        intent?.getStringExtra(EXTRA_ANIMATION_SPEED)
-            ?.let { name -> AnimationSpeed.entries.find { it.name == name } }
+        AnimationSpeed.fromName(intent?.getStringExtra(EXTRA_ANIMATION_SPEED))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

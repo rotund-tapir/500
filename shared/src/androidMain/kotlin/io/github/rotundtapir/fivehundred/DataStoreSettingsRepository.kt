@@ -17,9 +17,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     private val dataStore = context.applicationContext.settingsDataStore
 
     override val animationSpeed: Flow<AnimationSpeed> = dataStore.data.map { preferences ->
-        preferences[ANIMATION_SPEED_KEY]
-            ?.let { stored -> AnimationSpeed.entries.find { it.name == stored } }
-            ?: AnimationSpeed.NORMAL
+        AnimationSpeed.fromName(preferences[ANIMATION_SPEED_KEY]) ?: SettingsDefaults.ANIMATION_SPEED
     }
 
     override suspend fun setAnimationSpeed(speed: AnimationSpeed) {
@@ -27,7 +25,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     override val sortHandByDefault: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[SORT_HAND_BY_DEFAULT_KEY] ?: false
+        preferences[SORT_HAND_BY_DEFAULT_KEY] ?: SettingsDefaults.SORT_HAND_BY_DEFAULT
     }
 
     override suspend fun setSortHandByDefault(value: Boolean) {
@@ -35,7 +33,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     override val misereEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[MISERE_ENABLED_KEY] ?: true
+        preferences[MISERE_ENABLED_KEY] ?: SettingsDefaults.MISERE_ENABLED
     }
 
     override suspend fun setMisereEnabled(value: Boolean) {
@@ -43,7 +41,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     override val noTrumpsEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[NO_TRUMPS_ENABLED_KEY] ?: true
+        preferences[NO_TRUMPS_ENABLED_KEY] ?: SettingsDefaults.NO_TRUMPS_ENABLED
     }
 
     override suspend fun setNoTrumpsEnabled(value: Boolean) {
@@ -51,7 +49,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     override val holdTricks: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[HOLD_TRICKS_KEY] ?: false
+        preferences[HOLD_TRICKS_KEY] ?: SettingsDefaults.HOLD_TRICKS
     }
 
     override suspend fun setHoldTricks(value: Boolean) {
@@ -59,7 +57,7 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     override val soundVolume: Flow<Float> = dataStore.data.map { preferences ->
-        (preferences[SOUND_VOLUME_KEY] ?: 0.7f).coerceIn(0f, 1f)
+        (preferences[SOUND_VOLUME_KEY] ?: SettingsDefaults.SOUND_VOLUME).coerceIn(0f, 1f)
     }
 
     override suspend fun setSoundVolume(value: Float) {
@@ -67,11 +65,11 @@ class DataStoreSettingsRepository(context: Context) : SettingsRepository {
     }
 
     private companion object {
-        val ANIMATION_SPEED_KEY = stringPreferencesKey("animation_speed")
-        val SORT_HAND_BY_DEFAULT_KEY = booleanPreferencesKey("sort_hand_by_default")
-        val MISERE_ENABLED_KEY = booleanPreferencesKey("misere_enabled")
-        val NO_TRUMPS_ENABLED_KEY = booleanPreferencesKey("no_trumps_enabled")
-        val HOLD_TRICKS_KEY = booleanPreferencesKey("hold_tricks")
-        val SOUND_VOLUME_KEY = floatPreferencesKey("sound_volume")
+        val ANIMATION_SPEED_KEY = stringPreferencesKey(SettingsKeys.ANIMATION_SPEED)
+        val SORT_HAND_BY_DEFAULT_KEY = booleanPreferencesKey(SettingsKeys.SORT_HAND_BY_DEFAULT)
+        val MISERE_ENABLED_KEY = booleanPreferencesKey(SettingsKeys.MISERE_ENABLED)
+        val NO_TRUMPS_ENABLED_KEY = booleanPreferencesKey(SettingsKeys.NO_TRUMPS_ENABLED)
+        val HOLD_TRICKS_KEY = booleanPreferencesKey(SettingsKeys.HOLD_TRICKS)
+        val SOUND_VOLUME_KEY = floatPreferencesKey(SettingsKeys.SOUND_VOLUME)
     }
 }

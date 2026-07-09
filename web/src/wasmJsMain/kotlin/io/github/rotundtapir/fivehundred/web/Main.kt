@@ -46,8 +46,7 @@ fun main() {
 
     val params = URLSearchParams(window.location.search.toJsString())
     val seedOverride = params.get("seed")?.toLongOrNull()
-    val animationSpeedOverride = params.get("animationSpeed")
-        ?.let { name -> AnimationSpeed.entries.find { it.name == name } }
+    val animationSpeedOverride = AnimationSpeed.fromName(params.get("animationSpeed"))
     val soundVolumeOverride = params.get("soundVolume")?.toFloatOrNull()
 
     ComposeViewport(document.body!!) {

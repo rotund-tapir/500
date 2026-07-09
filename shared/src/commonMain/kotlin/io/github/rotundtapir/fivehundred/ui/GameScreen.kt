@@ -43,8 +43,7 @@ import kotlinx.coroutines.flow.first
 fun GameScreen(
     view: PlayerView,
     botNames: Map<Seat, String>,
-    animationSpeed: AnimationSpeed,
-    defaultSortHand: Boolean,
+    settings: SettingsControls,
     monetization: Monetization,
     onBid: (Bid) -> Unit,
     onDiscard: (List<Card>) -> Unit,
@@ -53,21 +52,11 @@ fun GameScreen(
     tutorial: TutorialScriptState? = null,
     onResultDismissed: (Int) -> Unit = {},
     onDealAnimationFinished: (Int) -> Unit = {},
-    holdTricks: Boolean = false,
-    onSetHoldTricks: (Boolean) -> Unit = {},
     onTrickAcknowledged: (Int, Int) -> Unit = { _, _ -> },
     soundHook: ((SoundEffect) -> Unit)? = null,
-    // Settings-dialog plumbing (the in-game cog opens the same dialog as the home screen's).
-    onCycleAnimationSpeed: () -> Unit = {},
-    onSetSortByDefault: (Boolean) -> Unit = {},
-    soundVolume: Float = 0f,
-    onSetSoundVolume: (Float) -> Unit = {},
-    misereEnabled: Boolean = true,
-    onSetMisereEnabled: (Boolean) -> Unit = {},
-    noTrumpsEnabled: Boolean = true,
-    onSetNoTrumpsEnabled: (Boolean) -> Unit = {},
 ) {
-    var sortHand by rememberSaveable { mutableStateOf(defaultSortHand) }
+    val animationSpeed = settings.animationSpeed
+    var sortHand by rememberSaveable { mutableStateOf(settings.sortByDefault) }
     var showSettings by remember { mutableStateOf(false) }
     var showLeaveConfirm by remember { mutableStateOf(false) }
     // Set once the tutorial's scripted hand has been scored and its result dialog dismissed.
@@ -138,7 +127,7 @@ fun GameScreen(
                     modifier = Modifier
                         .weight(1f)
                         .tutorialTarget(tutorialTargets, "trick"),
-                    holdTricks = holdTricks,
+                    holdTricks = settings.holdTricks,
                     // The tutorial always holds completed tricks so the bubble can explain each
                     // outcome (still inert at OFF, like all pacing).
                     forceHold = tutorial != null,
@@ -178,18 +167,7 @@ fun GameScreen(
 
     if (showSettings) {
         SettingsDialog(
-            animationSpeed = animationSpeed,
-            onCycleAnimationSpeed = onCycleAnimationSpeed,
-            sortByDefault = defaultSortHand,
-            onSetSortByDefault = onSetSortByDefault,
-            holdTricks = holdTricks,
-            onSetHoldTricks = onSetHoldTricks,
-            soundVolume = soundVolume,
-            onSetSoundVolume = onSetSoundVolume,
-            misereEnabled = misereEnabled,
-            onSetMisereEnabled = onSetMisereEnabled,
-            noTrumpsEnabled = noTrumpsEnabled,
-            onSetNoTrumpsEnabled = onSetNoTrumpsEnabled,
+            settings = settings,
             inGame = true,
             monetization = monetization,
             onDismiss = { showSettings = false },
