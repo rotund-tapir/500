@@ -32,6 +32,7 @@ import io.github.rotundtapir.fivehundred.net.PROTOCOL_VERSION
 import io.github.rotundtapir.fivehundred.net.PickSeat
 import io.github.rotundtapir.fivehundred.net.Platform
 import io.github.rotundtapir.fivehundred.net.RequestRematch
+import io.github.rotundtapir.fivehundred.net.ResumedState
 import io.github.rotundtapir.fivehundred.net.RoomPhase
 import io.github.rotundtapir.fivehundred.net.SeatStatus
 import io.github.rotundtapir.fivehundred.net.SendEmote
@@ -100,6 +101,12 @@ class OnlineViewModel(
 
     private val _gameOver = MutableStateFlow<GameOver?>(null)
     val gameOver: StateFlow<GameOver?> = _gameOver.asStateFlow()
+
+    // Set when reconnecting lands us back in an existing room (the server resumed our session). We
+    // hold the screen on the entry until the player chooses to rejoin or abandon, rather than
+    // silently dropping them back into a game they may have meant to leave.
+    private val _pendingRejoin = MutableStateFlow<ResumedState?>(null)
+    val pendingRejoin: StateFlow<ResumedState?> = _pendingRejoin.asStateFlow()
 
     private val _emotes = MutableSharedFlow<EmoteReceived>(extraBufferCapacity = EMOTE_BUFFER)
     val emotes: SharedFlow<EmoteReceived> = _emotes.asSharedFlow()
@@ -212,6 +219,7 @@ class OnlineViewModel(
         send(LeaveLobby)
         _lobby.value = null
         _gameOver.value = null
+        _pendingRejoin.value = null
         session.reset()
         _screen.value = OnlineScreen.ENTRY
     }
@@ -226,6 +234,7 @@ class OnlineViewModel(
         viewModelScope.launch { runCatching { client.close() } }
         _lobby.value = null
         _gameOver.value = null
+        _pendingRejoin.value = null
         session.reset()
         _screen.value = OnlineScreen.ENTRY
     }
@@ -289,12 +298,21 @@ class OnlineViewModel(
     private fun onWelcome(welcome: Welcome) {
         sessionToken = welcome.sessionToken
         pendingSnapshot = welcome.resumed != null
+        // A resumed session means the server put us back in a live room. Offer the rejoin choice
+        // instead of jumping straight into it (see [pendingRejoin]).
+        _pendingRejoin.value = welcome.resumed
         sessionReady.value = true
     }
 
     private fun onLobbyState(state: LobbyState) {
         _lobby.value = state
         recomputeSeatNames(state)
+        // While the rejoin prompt is up, keep the lobby/game data flowing but hold the screen on the
+        // entry — navigation happens only once the player confirms (see [confirmRejoin]).
+        if (_pendingRejoin.value == null) applyLobbyPhase(state)
+    }
+
+    private fun applyLobbyPhase(state: LobbyState) {
         when (state.phase) {
             RoomPhase.PLAYING -> _screen.value = OnlineScreen.GAME
             RoomPhase.LOBBY, RoomPhase.FINISHED -> {
@@ -302,6 +320,27 @@ class OnlineViewModel(
                 _screen.value = OnlineScreen.LOBBY
             }
         }
+    }
+
+    /** Accept the rejoin prompt: drop into the resumed lobby/game. */
+    fun confirmRejoin() {
+        _pendingRejoin.value = null
+        _lobby.value?.let(::applyLobbyPhase)
+    }
+
+    /**
+     * Decline the rejoin prompt and leave the resumed room for good: tell the server, then drop the
+     * session token so a later reconnect starts fresh instead of resuming this room again.
+     */
+    fun abandonGame() {
+        send(LeaveLobby)
+        sessionToken = null
+        _pendingRejoin.value = null
+        _lobby.value = null
+        _gameOver.value = null
+        session.reset()
+        occupancy = emptyMap()
+        _screen.value = OnlineScreen.ENTRY
     }
 
     private fun onSeatStatus(seat: Seat, status: OccupancyStatus) {
@@ -320,6 +359,7 @@ class OnlineViewModel(
     private fun onDisbanded(message: LobbyDisbanded) {
         _lobby.value = null
         _gameOver.value = null
+        _pendingRejoin.value = null
         session.reset()
         occupancy = emptyMap()
         _errorMessage.value = "Lobby closed: ${message.reason.name.lowercase().replace('_', ' ')}"

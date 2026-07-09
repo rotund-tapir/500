@@ -213,8 +213,11 @@ class Room(
     private fun onStart(cmd: RoomCommand.Start) {
         if (!isCreator(cmd.connection)) return reject(cmd.connection, ErrorCode.NOT_CREATOR, "Only the creator")
         if (phase != RoomPhase.LOBBY) return reject(cmd.connection, ErrorCode.WRONG_PHASE, "Already started")
-        val presentHumans = slots.filter { it.occupant != null }
-        if (presentHumans.isEmpty() || presentHumans.any { !it.ready }) {
+        // The creator pressing Start is their own readiness; only the other present humans (guests)
+        // must have readied up. Empty seats become bots.
+        val creatorSlot = slotOf(cmd.connection)
+        val guests = slots.filter { it.occupant != null && it !== creatorSlot }
+        if (guests.any { !it.ready }) {
             return reject(cmd.connection, ErrorCode.BAD_CONFIG, "All players must be ready")
         }
         launchGame()

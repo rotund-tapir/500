@@ -78,7 +78,7 @@ internal fun OnlineEntryScreen(
 ) {
     var name by remember { mutableStateOf(playerName) }
     val valid = Names.isValid(name)
-    OnlineScaffold(title = "Play online", onBack = onBack) {
+    OnlineScaffold(title = "Play with friends", onBack = onBack) {
         OutlinedTextField(
             value = name,
             onValueChange = {

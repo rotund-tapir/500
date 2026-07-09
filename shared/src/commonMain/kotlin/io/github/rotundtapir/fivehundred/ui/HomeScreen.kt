@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,8 +37,8 @@ import androidx.compose.ui.unit.sp
 import io.github.rotundtapir.cardkit.monetization.Monetization
 
 /**
- * A game mode the home screen offers: a table size plus its team structure. [players] and [teams]
- * feed straight into `FiveHundredRules(playerCount, teamCount)`.
+ * A game mode the bot-setup screen offers: a table size plus its team structure. [players] and
+ * [teams] feed straight into `FiveHundredRules(playerCount, teamCount)`.
  */
 enum class GameMode(
     val players: Int,
@@ -55,12 +56,10 @@ enum class GameMode(
 @Composable
 fun HomeScreen(
     monetization: Monetization,
-    onNewGame: () -> Unit,
+    onPlayWithBots: () -> Unit,
+    onPlayWithFriends: () -> Unit,
     onStartTutorial: () -> Unit,
-    onPlayOnline: () -> Unit,
     settings: SettingsControls,
-    mode: GameMode,
-    onModeChange: (GameMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -99,40 +98,24 @@ fun HomeScreen(
             ) {
                 Text("500", fontSize = 72.sp, fontWeight = FontWeight.Bold)
                 Text("Australian rules", fontSize = 16.sp)
-                Spacer(Modifier.height(24.dp))
-
-                // The four game modes, as a compact 2×2 grid of two-line buttons.
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GameMode.entries.chunked(2).forEach { rowModes ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            rowModes.forEach { m ->
-                                GameModeButton(
-                                    mode = m,
-                                    selected = m == mode,
-                                    onClick = { onModeChange(m) },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(32.dp))
 
                 Button(
-                    onClick = onNewGame,
+                    onClick = onPlayWithBots,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFFAFAFA),
                         contentColor = MaterialTheme.colorScheme.primary,
                     ),
-                ) { Text("Play offline", fontWeight = FontWeight.Bold) }
+                    modifier = Modifier.testTag("playWithBotsButton"),
+                ) { Text("Play with bots", fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.height(16.dp))
 
                 OutlinedButton(
-                    onClick = onPlayOnline,
+                    onClick = onPlayWithFriends,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                     modifier = Modifier.testTag("playOnlineButton"),
-                ) { Text("Play online") }
+                ) { Text("Play with friends") }
                 Spacer(Modifier.height(16.dp))
 
                 OutlinedButton(
@@ -141,7 +124,6 @@ fun HomeScreen(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                     modifier = Modifier.testTag("walkthroughButton"),
                 ) { Text("How to play") }
-
             }
         }
     }
@@ -162,6 +144,67 @@ fun HomeScreen(
             monetization = monetization,
             onDismiss = { showSettings = false },
         )
+    }
+}
+
+/**
+ * The bot-game setup screen reached from "Play with bots": pick the table shape, then start. The
+ * game-mode selection lives here rather than on the home screen so the home screen stays a simple
+ * three-way choice.
+ */
+@Composable
+fun BotSetupScreen(
+    mode: GameMode,
+    onModeChange: (GameMode) -> Unit,
+    onStart: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("Play with bots", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(24.dp))
+
+            // The four game modes, as a compact 2×2 grid of two-line buttons.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GameMode.entries.chunked(2).forEach { rowModes ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowModes.forEach { m ->
+                            GameModeButton(
+                                mode = m,
+                                selected = m == mode,
+                                onClick = { onModeChange(m) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFAFAFA),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier.testTag("startBotGame"),
+            ) { Text("Play", fontWeight = FontWeight.Bold) }
+            Spacer(Modifier.height(16.dp))
+
+            TextButton(onClick = onBack, modifier = Modifier.testTag("botSetupBack")) { Text("Back") }
+        }
     }
 }
 
