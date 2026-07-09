@@ -26,6 +26,7 @@ import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
@@ -111,6 +112,10 @@ private suspend fun io.ktor.server.websocket.DefaultWebSocketServerSession.handl
             }
             is GameServer.HelloResult.Accepted -> runSession(server, config, hello, ip, result)
         }
+    } catch (_: ClosedReceiveChannelException) {
+        // The client vanished without a clean close frame — a phone backgrounding, a dropped network,
+        // a closed tab. Routine churn, not a server fault: swallow it so it isn't logged as an ERROR
+        // ("Websocket handler failed"). The finally below still runs the normal disconnect cleanup.
     } finally {
         server.closeConnection(ip)
         server.metrics.connectionClosed()

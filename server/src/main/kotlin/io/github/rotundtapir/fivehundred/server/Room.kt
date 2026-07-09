@@ -142,7 +142,6 @@ class Room(
             is RoomCommand.Disconnected -> onDisconnected(command)
             is RoomCommand.StateProduced -> onStateProduced(command.state)
             is RoomCommand.GameFinished -> onGameFinished(command.state)
-            is RoomCommand.SeatTimedOut -> onSeatTimedOut(command.seat)
             is RoomCommand.ForceDisband -> disband(command.reason)
             RoomCommand.IdleCheck -> onIdleCheck()
         }
@@ -239,7 +238,6 @@ class Room(
                 bot = bot,
                 botRandom = Random(seed + slot.seat.index + 1),
                 turnTimeout = turnTimeoutMillis.milliseconds,
-                onTimedOut = { seat -> submit(RoomCommand.SeatTimedOut(seat)) },
             )
             if (slot.occupant == null) {
                 slot.isBot = true
@@ -307,13 +305,6 @@ class Room(
             lastAccepted = AcceptedMove(cmd.stateVersion, slot.seat, cmd.action)
             markActivity()
         }
-    }
-
-    private fun onSeatTimedOut(seat: Seat) {
-        val slot = slots.getOrNull(seat.index) ?: return
-        slot.occupant = null
-        slot.host?.occupant = null
-        broadcastSeatStatus(seat, OccupancyStatus.BOT_SUBSTITUTE)
     }
 
     private fun onGameFinished(state: GameState) {

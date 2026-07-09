@@ -26,8 +26,6 @@ class SeatHost(
     private val bot: Strategy<PlayerView, Action>,
     private val botRandom: Random,
     private val turnTimeout: Duration,
-    /** Notifies the room that this seat just got bot-substituted (a human's turn timed out). */
-    private val onTimedOut: suspend (Seat) -> Unit,
 ) : Player<PlayerView, Action> {
 
     /** The connection currently playing this seat, or null for a bot (empty seat or dropped human). */
@@ -50,12 +48,12 @@ class SeatHost(
         }
         // The client already has this view (the room fanned it out after the previous action); it
         // carries isMyTurn + the legal-action lists, so it is the turn prompt. Just wait for the
-        // action, falling back to the bot if the human runs out the clock.
+        // action, falling back to the bot for this one turn if the human runs out the clock. A
+        // timeout does NOT surrender the seat: the occupant stays connected and is prompted again on
+        // their next turn. Only an actual socket drop (ping timeout) evicts, via the room's
+        // Disconnected handling, with reclaim on reconnect.
         return withTimeoutOrNull(turnTimeout) { responses.receive() }
-            ?: run {
-                onTimedOut(seat)
-                bot.decide(view, botRandom)
-            }
+            ?: bot.decide(view, botRandom)
     }
 
     /**

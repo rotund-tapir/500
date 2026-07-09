@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 package io.github.rotundtapir.fivehundred.ui.online
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,7 +32,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.monetization.Monetization
+import io.github.rotundtapir.fivehundred.LocalAppConfig
 import io.github.rotundtapir.fivehundred.net.ConnectionState
+import io.github.rotundtapir.fivehundred.net.Platform
 import io.github.rotundtapir.fivehundred.rememberGameSoundEffects
 import io.github.rotundtapir.fivehundred.online.OnlineScreen
 import io.github.rotundtapir.fivehundred.online.OnlineViewModel
@@ -67,9 +75,22 @@ fun OnlineFlow(
             confirmButton = { TextButton(onClick = onExit, modifier = Modifier.testTag("updateRequired")) { Text("OK") } },
         )
     }
-    error?.let { LaunchedEffect(it) { delay(ERROR_BANNER_MILLIS); vm.dismissError() } }
+    // In-game rejections (stale/illegal move) auto-dismiss so they never block the board. On the
+    // setup/lobby screens the error stays put — a bad or expired code, a full lobby, a name clash —
+    // until the player's next action clears it, so the feedback can't be missed as a brief flash.
+    if (screen == OnlineScreen.GAME) {
+        error?.let { LaunchedEffect(it) { delay(ERROR_BANNER_MILLIS); vm.dismissError() } }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
+        // The setup/lobby screens are static, and Compose for Web is slow to schedule a frame for a
+        // purely network-driven state change (a join reply, a roster update, an error banner) — so
+        // the screen can appear to do nothing after a tap until the next user interaction forces a
+        // repaint. Keeping the frame clock ticking makes server pushes render promptly. Web-only and
+        // off in-game, where deal/trick animations already drive frames.
+        if (LocalAppConfig.current.platform == Platform.WEB && screen != OnlineScreen.GAME) {
+            NetworkFrameKeepAlive()
+        }
         when (screen) {
             OnlineScreen.ENTRY -> OnlineEntryScreen(
                 playerName = settings.playerName,
@@ -185,6 +206,24 @@ private fun ConnectionBanner(vm: OnlineViewModel) {
             modifier = Modifier.fillMaxWidth().padding(6.dp),
         )
     }
+}
+
+/**
+ * An invisible, endlessly-repeating animation whose only job is to keep the Compose frame clock
+ * ticking on the otherwise-static online setup/lobby screens (see call site). The animated value is
+ * consumed by an off-screen 1-px box so the animation is observed and never optimised away; alpha is
+ * pinned to 0 so nothing is ever visible.
+ */
+@Composable
+private fun NetworkFrameKeepAlive() {
+    val transition = rememberInfiniteTransition(label = "netFramePump")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 600)),
+        label = "netFramePump",
+    )
+    Box(Modifier.size(1.dp).alpha(phase * 0f))
 }
 
 @Composable

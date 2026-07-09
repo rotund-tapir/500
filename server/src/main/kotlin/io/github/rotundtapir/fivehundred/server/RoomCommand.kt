@@ -42,9 +42,6 @@ sealed interface RoomCommand {
     /** Fired when the driver reaches a terminal state. */
     data class GameFinished(val state: GameState) : RoomCommand
 
-    /** A seat's human ran out the turn clock and was bot-substituted. */
-    data class SeatTimedOut(val seat: Seat) : RoomCommand
-
     /** Server-initiated teardown (graceful shutdown), bypassing the creator check. */
     data class ForceDisband(val reason: DisbandReason) : RoomCommand
 

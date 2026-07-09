@@ -159,8 +159,14 @@ class OnlineViewModel(
     }
 
     // --- Navigation -------------------------------------------------------------------------------
-    fun goToCreate() { _screen.value = OnlineScreen.CREATE }
-    fun goToJoin() { _screen.value = OnlineScreen.JOIN }
+    fun goToCreate() {
+        _errorMessage.value = null
+        _screen.value = OnlineScreen.CREATE
+    }
+    fun goToJoin() {
+        _errorMessage.value = null
+        _screen.value = OnlineScreen.JOIN
+    }
     fun backToEntry() {
         _errorMessage.value = null
         _screen.value = OnlineScreen.ENTRY
@@ -175,17 +181,23 @@ class OnlineViewModel(
         teamCount: Int,
         turnTimeoutSeconds: Int,
         idleDisbandMinutes: Int,
-    ) = send(
-        CreateLobby(
-            displayName = displayName,
-            playerCount = playerCount,
-            teamCount = teamCount,
-            turnTimeoutSeconds = turnTimeoutSeconds,
-            idleDisbandMinutes = idleDisbandMinutes,
-        ),
-    )
+    ) {
+        _errorMessage.value = null
+        send(
+            CreateLobby(
+                displayName = displayName,
+                playerCount = playerCount,
+                teamCount = teamCount,
+                turnTimeoutSeconds = turnTimeoutSeconds,
+                idleDisbandMinutes = idleDisbandMinutes,
+            ),
+        )
+    }
 
-    fun joinLobby(code: String, displayName: String) = send(JoinLobby(code.trim(), displayName))
+    fun joinLobby(code: String, displayName: String) {
+        _errorMessage.value = null
+        send(JoinLobby(code.trim(), displayName))
+    }
     fun setName(displayName: String) = send(SetName(displayName))
     fun pickSeat(seat: Seat) = send(PickSeat(seat))
     fun setReady(ready: Boolean) = send(SetReady(ready))
