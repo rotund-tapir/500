@@ -36,6 +36,12 @@ sealed interface RoomCommand {
     data class Rematch(val connection: PlayerConnection) : RoomCommand
     data class Disconnected(val connection: PlayerConnection) : RoomCommand
 
+    /**
+     * The reconnect grace window scheduled by a lobby/post-game [Disconnected] ran out. A no-op if
+     * the seat's owner reconnected in the meantime (the slot then holds a different connection).
+     */
+    data class DisconnectGraceExpired(val connection: PlayerConnection) : RoomCommand
+
     /** Fired by the [GameDriver] after every applied action (and the initial state). */
     data class StateProduced(val state: GameState) : RoomCommand
 

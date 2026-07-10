@@ -145,12 +145,14 @@ class ServerUnitTest {
             "DEV_MODE" to "true",
             "ALLOWED_ORIGINS" to "https://a.example, https://b.example",
             "MAX_CONNECTIONS_PER_IP" to "3",
+            "LOBBY_GRACE_MILLIS" to "5000",
         )
         val config = ServerConfig.fromEnv { env[it] }
         assertEquals(9000, config.port)
         assertTrue(config.devMode)
         assertEquals(listOf("https://a.example", "https://b.example"), config.allowedOrigins)
         assertEquals(3, config.maxConnectionsPerIp)
+        assertEquals(5000L, config.lobbyDisconnectGraceMillis)
     }
 
     @Test

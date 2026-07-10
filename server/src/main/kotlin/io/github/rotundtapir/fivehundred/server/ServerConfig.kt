@@ -14,7 +14,7 @@ data class ServerConfig(
     val allowedOrigins: List<String> = listOf("https://rotundtapir.github.io"),
     /** Oldest app version the server still accepts; older clients are told to update. */
     val minAppVersion: String = "0.3.0",
-    val serverVersion: String = "0.3.0",
+    val serverVersion: String = "0.3.1",
     val maxConnectionsPerIp: Int = 8,
     val messageRatePerSecond: Int = 10,
     val messageBurst: Int = 20,
@@ -23,6 +23,12 @@ data class ServerConfig(
     val maxFrameBytes: Long = 16 * 1024,
     /** How long an untouched session token survives before the periodic sweep drops it. */
     val sessionTtlMillis: Long = 60 * 60_000L,
+    /**
+     * How long a lobby/post-game seat is held for its owner after a bare socket drop, so a page
+     * reload or transient network blip can reconnect and reclaim it — instead of the room being
+     * disbanded (creator) or the seat freed (guest) the instant the old socket closes.
+     */
+    val lobbyDisconnectGraceMillis: Long = 30_000L,
     /** Relaxes IP caps and honours a client-supplied game seed. For local dev / e2e only. */
     val devMode: Boolean = false,
     /** Test hook: force the per-turn timeout to this many ms, ignoring the lobby's seconds setting. */
@@ -51,7 +57,7 @@ data class ServerConfig(
                     ?.split(",")?.map(String::trim)?.filter(String::isNotEmpty)
                     ?: listOf("https://rotundtapir.github.io"),
                 minAppVersion = getenv("MIN_APP_VERSION") ?: "0.3.0",
-                serverVersion = getenv("SERVER_VERSION") ?: "0.3.0",
+                serverVersion = getenv("SERVER_VERSION") ?: "0.3.1",
                 maxConnectionsPerIp = int("MAX_CONNECTIONS_PER_IP", 8),
                 messageRatePerSecond = int("MSG_RATE_PER_SEC", 10),
                 messageBurst = int("MSG_BURST", 20),
@@ -59,6 +65,7 @@ data class ServerConfig(
                 maxRooms = int("MAX_ROOMS", 500),
                 maxFrameBytes = long("MAX_FRAME_BYTES", 16 * 1024),
                 sessionTtlMillis = long("SESSION_TTL_MILLIS", 60 * 60_000L),
+                lobbyDisconnectGraceMillis = long("LOBBY_GRACE_MILLIS", 30_000L),
                 devMode = bool("DEV_MODE", false),
             )
         }

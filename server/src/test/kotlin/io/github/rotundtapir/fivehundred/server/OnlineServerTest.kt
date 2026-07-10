@@ -5,12 +5,14 @@ import io.github.rotundtapir.fivehundred.ai.FiveHundredBot
 import io.github.rotundtapir.fivehundred.engine.Action
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.net.CreateLobby
+import io.github.rotundtapir.fivehundred.net.DisbandReason
 import io.github.rotundtapir.fivehundred.net.ErrorCode
 import io.github.rotundtapir.fivehundred.net.ErrorMessage
 import io.github.rotundtapir.fivehundred.net.GameOver
 import io.github.rotundtapir.fivehundred.net.Hello
 import io.github.rotundtapir.fivehundred.net.JoinLobby
 import io.github.rotundtapir.fivehundred.net.LeaveLobby
+import io.github.rotundtapir.fivehundred.net.LobbyDisbanded
 import io.github.rotundtapir.fivehundred.net.LobbyState
 import io.github.rotundtapir.fivehundred.net.PROTOCOL_VERSION
 import io.github.rotundtapir.fivehundred.net.Platform
@@ -443,6 +445,116 @@ class OnlineServerTest {
                     assertEquals(null, waitFor<Welcome>().resumed, "a cleanly-left token must not resume")
                 }
                 aliceMayLeave.complete(Unit)
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a creator socket drop in the lobby is held for the grace window and the token reclaims it`() =
+        testApplication {
+            // Generous grace so the reconnect below always lands inside it, even on a slow runner.
+            val (_, scope) = startServer(devConfig { copy(lobbyDisconnectGraceMillis = 30_000) })
+            val client = createClient { install(WebSockets) }
+            try {
+                val token = CompletableDeferred<String>()
+                val code = CompletableDeferred<String>()
+                // Alice creates a lobby, then her socket drops with no clean leave — a page reload.
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                    token.complete(waitFor<Welcome>().sessionToken)
+                    sendMsg(CreateLobby("Alice", playerCount = 2, teamCount = 2))
+                    code.complete(waitFor<LobbyState>().joinCode)
+                }
+                // The reloaded page reconnects with the persisted token: the lobby must still exist
+                // (not CREATOR_DISBANDED) and the reclaimed seat must still be the creator's.
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB, sessionToken = token.await()))
+                    val resumed = assertNotNull(waitFor<Welcome>().resumed, "the lobby must survive the drop")
+                    assertEquals(code.await(), resumed.joinCode)
+                    val lobby = waitFor<LobbyState>()
+                    assertEquals(lobby.creatorSeat, lobby.yourSeat, "the reclaimed seat is still the creator")
+                }
+            } finally {
+                scope.cancel()
+            }
+        }
+
+    @Test
+    fun `a creator drop past the grace window disbands the lobby for the guests`() = testApplication {
+        val (_, scope) = startServer(devConfig { copy(lobbyDisconnectGraceMillis = 300) })
+        val client = createClient { install(WebSockets) }
+        try {
+            val code = CompletableDeferred<String>()
+            val aliceGone = CompletableDeferred<Unit>()
+            coroutineScope {
+                launch {
+                    client.webSocket("/ws") {
+                        sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                        waitFor<Welcome>()
+                        sendMsg(CreateLobby("Alice", playerCount = 4, teamCount = 2))
+                        code.complete(waitFor<LobbyState>().joinCode)
+                        // Wait for Bob to be seated (so he observes what follows), then vanish.
+                        waitForLobby { st -> st.seats.count { it.name.isNotBlank() } == 2 }
+                    }
+                    aliceGone.complete(Unit)
+                }
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                    waitFor<Welcome>()
+                    sendMsg(JoinLobby(code.await(), "Bob"))
+                    waitFor<LobbyState>()
+                    aliceGone.await()
+                    // First the roster shows the creator disconnected (the room is NOT disbanded yet)…
+                    val held = withTimeout(TEST_TIMEOUT_MS) {
+                        waitForLobby { st -> !st.seats.first { it.seat == st.creatorSeat }.connected }
+                    }
+                    assertEquals(RoomPhase.LOBBY, held.phase)
+                    // …then, once the grace runs out with no reconnect, the disband lands.
+                    val disbanded = withTimeout(TEST_TIMEOUT_MS) { waitFor<LobbyDisbanded>() }
+                    assertEquals(DisbandReason.CREATOR_DISBANDED, disbanded.reason)
+                }
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a guest drop past the grace window frees the seat and stops the token resuming`() = testApplication {
+        val (_, scope) = startServer(devConfig { copy(lobbyDisconnectGraceMillis = 300) })
+        val client = createClient { install(WebSockets) }
+        try {
+            val code = CompletableDeferred<String>()
+            val bobToken = CompletableDeferred<String>()
+            coroutineScope {
+                val bob = launch {
+                    client.webSocket("/ws") {
+                        sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                        bobToken.complete(waitFor<Welcome>().sessionToken)
+                        sendMsg(JoinLobby(code.await(), "Bob"))
+                        waitFor<LobbyState>() // seated; now drop without a clean leave
+                    }
+                }
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.ANDROID))
+                    waitFor<Welcome>()
+                    sendMsg(CreateLobby("Alice", playerCount = 4, teamCount = 2))
+                    code.complete(waitFor<LobbyState>().joinCode)
+                    bob.join()
+                    // The seat is freed (name cleared) once the grace expires — no disband.
+                    withTimeout(TEST_TIMEOUT_MS) {
+                        waitForLobby { st -> st.seats.count { it.name.isNotBlank() } == 1 }
+                    }
+                    // And Bob's token no longer resumes into the room he timed out of.
+                    launch {
+                        client.webSocket("/ws") {
+                            sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB, sessionToken = bobToken.await()))
+                            assertEquals(null, waitFor<Welcome>().resumed, "an expired seat must not resume")
+                        }
+                    }.join()
+                }
             }
         } finally {
             scope.cancel()

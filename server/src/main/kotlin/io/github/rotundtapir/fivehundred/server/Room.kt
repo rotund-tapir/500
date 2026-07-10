@@ -151,6 +151,7 @@ class Room(
             is RoomCommand.Disband -> onDisband(command)
             is RoomCommand.Rematch -> onRematch(command)
             is RoomCommand.Disconnected -> onDisconnected(command)
+            is RoomCommand.DisconnectGraceExpired -> onDisconnectGraceExpired(command)
             is RoomCommand.StateProduced -> onStateProduced(command.state)
             is RoomCommand.GameFinished -> onGameFinished(command.state)
             is RoomCommand.ForceDisband -> disband(command.reason)
@@ -261,7 +262,9 @@ class Room(
                 slot.name = Names.botLabel(botNames[botIndex++])
                 host.permanentBot = true
             } else {
-                host.occupant = slot.occupant
+                // A seat whose owner is in the disconnect grace stays human (they can reclaim it),
+                // but starts bot-covered so the table never waits out a turn timeout on a dead socket.
+                host.occupant = slot.occupant?.takeIf { it.connected }
             }
             slot.host = host
             players[slot.seat] = host
@@ -435,10 +438,31 @@ class Room(
     private fun onDisconnected(cmd: RoomCommand.Disconnected) {
         val slot = slotOf(cmd.connection) ?: return
         if (phase == RoomPhase.PLAYING) {
-            slot.occupant = null
-            slot.host?.occupant = null
-            slot.host?.interrupt() // wake a parked turn so the bot covers it now, not after the timeout
-            broadcastSeatStatus(slot.seat, OccupancyStatus.BOT_SUBSTITUTE)
+            substituteBot(slot)
+        } else {
+            // Lobby/post-game: hold the seat (and its session→seat binding) for a short grace
+            // window instead of acting on the drop immediately, so a page reload — which closes the
+            // socket and reconnects seconds later with the same session token — reclaims the seat
+            // rather than disbanding the room (creator) or losing it (guest). The roster broadcast
+            // shows the seat as disconnected in the meantime.
+            broadcastLobby()
+            scope.launch {
+                delay(config.lobbyDisconnectGraceMillis)
+                submit(RoomCommand.DisconnectGraceExpired(cmd.connection))
+            }
+        }
+        recomputeEmptiness()
+    }
+
+    private fun onDisconnectGraceExpired(cmd: RoomCommand.DisconnectGraceExpired) {
+        // Only act if the seat still holds the connection that dropped: a reconnect within the
+        // grace put a *new* connection (with a new id) in the slot, and an explicit Leave/Disband
+        // cleared it — either way this command is stale and must do nothing.
+        val slot = slotOf(cmd.connection) ?: return
+        if (phase == RoomPhase.PLAYING) {
+            // The game started while the seat was in grace (launchGame keeps a held seat human):
+            // now that the owner is confirmed gone, let the bot cover it. Reclaim stays possible.
+            substituteBot(slot)
         } else {
             clearSlot(slot)
             if (isCreator(cmd.connection) && phase == RoomPhase.LOBBY) {
@@ -448,6 +472,14 @@ class Room(
             broadcastLobby()
         }
         recomputeEmptiness()
+    }
+
+    /** In-game handling of a vanished occupant: the bot plays the seat until its owner reclaims it. */
+    private fun substituteBot(slot: Slot) {
+        slot.occupant = null
+        slot.host?.occupant = null
+        slot.host?.interrupt() // wake a parked turn so the bot covers it now, not after the timeout
+        broadcastSeatStatus(slot.seat, OccupancyStatus.BOT_SUBSTITUTE)
     }
 
     private fun onIdleCheck() {
