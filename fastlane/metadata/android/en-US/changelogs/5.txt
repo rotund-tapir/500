@@ -1,0 +1,1 @@
+Small online lobby fix: a seat being held for a briefly-disconnected player now shows "Reconnecting…" instead of a "Sit here" button that couldn't work.
