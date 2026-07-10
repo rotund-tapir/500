@@ -2,7 +2,9 @@
 package io.github.rotundtapir.fivehundred.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,6 +50,8 @@ internal fun BubbleLayout(
     val local = target.translate(-overlayOrigin)
     val tailWidth = with(density) { TAIL_WIDTH.toPx() }
     val tailX = { (local.center.x - bubbleLeft - tailWidth / 2).roundToInt() }
+    // The overlay is edge-to-edge, so the top clamp must not let a bubble slide under the status bar.
+    val topInset = WindowInsets.safeDrawing.getTop(density)
 
     Layout(
         content = {
@@ -67,8 +71,9 @@ internal fun BubbleLayout(
             val x = (local.center.x - placeable.width / 2f).roundToInt()
                 .coerceIn(margin, (constraints.maxWidth - placeable.width - margin).coerceAtLeast(margin))
             val gap = with(density) { 2.dp.roundToPx() }
+            val topFloor = topInset + margin
             val y = yPlacement(local, placeable.height, gap)
-                .coerceIn(margin, (constraints.maxHeight - placeable.height - margin).coerceAtLeast(margin))
+                .coerceIn(topFloor, (constraints.maxHeight - placeable.height - margin).coerceAtLeast(topFloor))
             bubbleLeft = x
             placeable.place(x, y)
         }

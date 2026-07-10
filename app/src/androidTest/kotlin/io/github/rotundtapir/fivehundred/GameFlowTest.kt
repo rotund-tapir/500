@@ -142,8 +142,16 @@ class GameFlowTest {
         rule.waitUntil(STEP_TIMEOUT_MS) { textExists(bidStep.advice) }
         rule.onNodeWithTag("tutorialAdvice").assertIsDisplayed()
 
+        // The tutorial itself must scroll the scripted bid into the ladder's viewport — a human
+        // can't be told to tap a button they can't see. Deliberately NO performScrollTo here:
+        // the pre-fix bug left 7♠ off-screen (and the guidance bubble anchored to an empty rect).
+        rule.waitUntil(STEP_TIMEOUT_MS) {
+            runCatching {
+                rule.onNodeWithTag("bid:${bidStep.bid.label}").assertIsDisplayed()
+            }.isSuccess
+        }
         // Only the scripted bid is tappable; everything else — even Pass — is disabled.
-        rule.onNodeWithTag("bid:${bidStep.bid.label}").performScrollTo().assertIsEnabled()
+        rule.onNodeWithTag("bid:${bidStep.bid.label}").assertIsEnabled()
         rule.onNodeWithTag("bid:Pass").performScrollTo().assertIsNotEnabled()
     }
 

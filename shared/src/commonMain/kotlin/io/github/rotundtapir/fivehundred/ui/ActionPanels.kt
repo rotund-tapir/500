@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -150,6 +152,11 @@ private fun BiddingPanel(
 ) {
     // Guard against double taps: one bid per PlayerView.
     var acted by remember(view) { mutableStateOf(false) }
+    // The tutorial's scripted bid can start outside the scrollable ladder's viewport (a phone fits
+    // roughly five buttons, and the script opens at 7♠). Scroll it into view: the player must be
+    // able to SEE the button the advice names, and a fully-clipped target reports an empty rect,
+    // which would strand the guidance bubble at the screen origin.
+    val anchorInView = remember { BringIntoViewRequester() }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Your bid:", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -169,13 +176,21 @@ private fun BiddingPanel(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                     modifier = Modifier
                         .testTag("bid:${bid.label}")
+                        .bringIntoViewVia(anchorInView.takeIf { bid == anchorBid })
                         .tutorialTarget(if (bid == anchorBid) targets else null, "action"),
                 ) { SuitText(bid.label) }
             }
         }
+        if (anchorBid != null) {
+            LaunchedEffect(anchorBid) { anchorInView.bringIntoView() }
+        }
         Spacer(Modifier.height(8.dp))
     }
 }
+
+/** Attaches [requester] when non-null — the factory-style conditional-modifier shape (see CLAUDE.md). */
+private fun Modifier.bringIntoViewVia(requester: BringIntoViewRequester?): Modifier =
+    if (requester == null) this else bringIntoViewRequester(requester)
 
 @Composable
 private fun DiscardPanel(

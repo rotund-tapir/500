@@ -73,6 +73,10 @@ internal fun Modifier.tutorialTarget(
 ): Modifier =
     if (anchors == null) this else onGloballyPositioned { coords ->
         val bounds = coords.boundsInRoot()
+        // boundsInRoot() is clipped by ancestors: a target fully scrolled out of a scrollable
+        // reports an empty rect at the origin, which would anchor the bubble to the screen corner.
+        // Skip it and keep the last real bounds (or let the caller's fallback anchor apply).
+        if (bounds.width <= 0f || bounds.height <= 0f) return@onGloballyPositioned
         anchors.record(
             key,
             if (widthFraction >= 1f) {
