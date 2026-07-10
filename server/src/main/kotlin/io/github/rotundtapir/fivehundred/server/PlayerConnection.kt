@@ -39,7 +39,22 @@ class PlayerConnection(
     /** Queue [message] for delivery. Returns false if the buffer is full (caller should evict). */
     fun enqueue(message: ServerMessage): Boolean = outbound.trySend(message).isSuccess
 
+    @Volatile
+    private var lastAbuseLogAt: Long = 0
+
+    /**
+     * Rate-limit abuse logging to at most one line per [ABUSE_LOG_INTERVAL_MILLIS] for this
+     * connection, so a flooding client can't itself flood the log before fail2ban bans it. Returns
+     * true when the caller should emit a log line.
+     */
+    fun throttleAbuseLog(nowMillis: Long): Boolean {
+        if (nowMillis - lastAbuseLogAt < ABUSE_LOG_INTERVAL_MILLIS) return false
+        lastAbuseLogAt = nowMillis
+        return true
+    }
+
     companion object {
         const val OUTBOUND_CAPACITY: Int = 64
+        const val ABUSE_LOG_INTERVAL_MILLIS: Long = 1000
     }
 }

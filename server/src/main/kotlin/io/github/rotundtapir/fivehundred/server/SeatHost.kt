@@ -7,6 +7,7 @@ import io.github.rotundtapir.cardkit.core.Strategy
 import io.github.rotundtapir.fivehundred.engine.Action
 import io.github.rotundtapir.fivehundred.engine.PlayerView
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.Duration
@@ -36,29 +37,54 @@ class SeatHost(
     @Volatile
     var permanentBot: Boolean = false
 
-    // Capacity 1 (not rendezvous): a validated action is buffered even if decide() is a hair away
-    // from awaiting it, so a submit is never silently dropped by a timing race. At most one action
-    // is outstanding per turn (the room validates stateVersion first), so it can't buffer a stale one.
+    // Capacity 1, but DRAINED at the top of every decide() (see below). The buffer means submit() is
+    // a non-suspending trySend that never depends on a receiver being parked at that exact instant
+    // (a rendezvous channel does not reliably hand off to a select-registered receiver). Draining on
+    // entry is what makes it safe: any action left over from a previous turn — e.g. one that raced
+    // ahead of the room's state bookkeeping after a timeout already ran the bot — is discarded before
+    // this turn waits, so a stale action can never be consumed as the answer to a *different* turn
+    // (the room-wedging bug a plain capacity-1 buffer used to allow).
     private val responses = Channel<Action>(capacity = 1)
 
+    // Wakes a parked decide() early when the occupant drops, so the table doesn't freeze for the
+    // whole turn timeout waiting on someone who has already left. CONFLATED: a spare signal from a
+    // previous turn just coalesces and is drained at the next decide() entry.
+    private val interrupts = Channel<Unit>(capacity = Channel.CONFLATED)
+
     override suspend fun decide(view: PlayerView): Action {
+        // Drain anything buffered from a prior turn (stale submits, a spent interrupt) so this turn
+        // starts clean. A legit action for THIS turn can't be here yet: the client only sends after
+        // seeing this turn's view, which is delivered after the driver has already entered decide().
+        while (responses.tryReceive().isSuccess) {}
+        while (interrupts.tryReceive().isSuccess) {}
         val conn = occupant
         if (permanentBot || conn == null || !conn.connected) {
             return bot.decide(view, botRandom)
         }
         // The client already has this view (the room fanned it out after the previous action); it
-        // carries isMyTurn + the legal-action lists, so it is the turn prompt. Just wait for the
-        // action, falling back to the bot for this one turn if the human runs out the clock. A
-        // timeout does NOT surrender the seat: the occupant stays connected and is prompted again on
-        // their next turn. Only an actual socket drop (ping timeout) evicts, via the room's
+        // carries isMyTurn + the legal-action lists, so it is the turn prompt. Wait for the action,
+        // falling back to the bot for this one turn if the human runs out the clock OR drops mid-turn
+        // ([interrupt]). A timeout does NOT surrender the seat: the occupant stays connected and is
+        // prompted again on their next turn. Only an actual socket drop evicts, via the room's
         // Disconnected handling, with reclaim on reconnect.
-        return withTimeoutOrNull(turnTimeout) { responses.receive() }
-            ?: bot.decide(view, botRandom)
+        val chosen: Action? = withTimeoutOrNull(turnTimeout) {
+            select {
+                responses.onReceive { it }
+                interrupts.onReceive { null } // occupant dropped — hand this turn to the bot now
+            }
+        }
+        return chosen ?: bot.decide(view, botRandom)
+    }
+
+    /** Nudge a parked [decide] to fall back to the bot immediately (the occupant just disconnected). */
+    fun interrupt() {
+        interrupts.trySend(Unit)
     }
 
     /**
-     * Hand a validated action to the waiting [decide]. Returns false if no turn is in progress (a
-     * stale double-submit racing a state change) — the network analogue of `trySubmit`.
+     * Hand a validated action to [decide]. Returns false only if the (capacity-1) buffer already
+     * holds an un-consumed action — the network analogue of `trySubmit`. Anything buffered is
+     * discarded at the next [decide] entry, so it can never answer a later turn.
      */
     fun submit(action: Action): Boolean = responses.trySend(action).isSuccess
 }

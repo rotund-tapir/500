@@ -55,4 +55,21 @@ class SlidingWindowCounter(
             false
         }
     }
+
+    /**
+     * Drop keys whose hits have all aged out of the window. tryRecord only trims the key it touches,
+     * so a key seen once and never again would otherwise linger forever; a periodic sweep bounds it.
+     */
+    @Synchronized
+    fun evictStale() {
+        val cutoff = nowMillis() - windowMillis
+        hits.entries.removeAll { (_, deque) ->
+            while (deque.isNotEmpty() && deque.first() < cutoff) deque.removeFirst()
+            deque.isEmpty()
+        }
+    }
+
+    /** Live key count — for tests asserting stale entries are evicted. */
+    @Synchronized
+    fun keyCount(): Int = hits.size
 }

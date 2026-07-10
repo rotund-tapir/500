@@ -31,6 +31,7 @@ import io.github.rotundtapir.fivehundred.net.SeatInfo
 import io.github.rotundtapir.fivehundred.net.SeatStatus
 import io.github.rotundtapir.fivehundred.net.ServerMessage
 import io.github.rotundtapir.fivehundred.net.ViewUpdate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -49,7 +50,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class Room(
     val gameId: String,
-    val joinCode: String,
+    var joinCode: String,
     private val creatorToken: String,
     initialConfig: LobbyConfig,
     private val requestedSeed: Long?,
@@ -57,6 +58,7 @@ class Room(
     private val config: ServerConfig,
     private val sessionRegistry: SessionRegistry,
     private val metrics: Metrics,
+    private val abuseLog: AbuseLog,
     private val nowMillis: () -> Long,
     private val onClosed: (Room) -> Unit,
 ) {
@@ -65,6 +67,9 @@ class Room(
     private val bot: Strategy<PlayerView, Action> = FiveHundredBot()
 
     private var lobbyConfig = initialConfig
+
+    // Read cross-thread (isPlaying/resumedState from the Ktor handler & /health), written on the actor.
+    @Volatile
     private var phase = RoomPhase.LOBBY
     private val slots: List<Slot> = (0 until initialConfig.playerCount).map { Slot(Seat(it)) }
 
@@ -81,6 +86,9 @@ class Room(
     /** The most recent accepted move, for idempotent handling of duplicate submissions. */
     private var lastAccepted: AcceptedMove? = null
 
+    /** The final scoreline once the game ends, so a late reconnector still sees the result. */
+    private var finalResult: GameOver? = null
+
     private data class AcceptedMove(val stateVersion: Int, val seat: Seat, val action: Action)
 
     private val turnTimeoutMillis: Long
@@ -95,6 +103,9 @@ class Room(
         var ready: Boolean = false
         var isBot: Boolean = false
         var host: SeatHost? = null
+
+        /** The session token that owns this seat, so a reconnect can only reclaim its own seat. */
+        var ownerToken: String? = null
     }
 
     /** Enqueue a command for the actor loop. Never blocks (the channel is unbounded). */
@@ -162,7 +173,9 @@ class Room(
         }
         seat(cmd.connection, free, validated)
         broadcastLobby()
-        markActivity()
+        // recompute (not markActivity): if the joining socket died before this ran, no one is
+        // connected, so emptySince starts ticking and the idle sweep reclaims the stillborn room.
+        recomputeEmptiness()
     }
 
     private fun onSetName(cmd: RoomCommand.SetName) {
@@ -190,6 +203,7 @@ class Room(
     }
 
     private fun onSetReady(cmd: RoomCommand.SetReady) {
+        if (phase != RoomPhase.LOBBY) return reject(cmd.connection, ErrorCode.WRONG_PHASE, "Lobby only")
         val slot = slotOf(cmd.connection) ?: return rejectNotInLobby(cmd.connection)
         slot.ready = cmd.ready
         broadcastLobby()
@@ -258,10 +272,20 @@ class Room(
         metrics.gameStarted()
         val initial = gameRules.newGame(seed)
         driverJob = scope.launch {
-            val terminal = GameDriver(gameRules, players).play(initial) { state ->
-                submit(RoomCommand.StateProduced(state))
+            try {
+                val terminal = GameDriver(gameRules, players).play(initial) { state ->
+                    submit(RoomCommand.StateProduced(state))
+                }
+                submit(RoomCommand.GameFinished(terminal))
+            } catch (e: CancellationException) {
+                throw e // room closing / rematch — normal teardown
+            } catch (e: Exception) {
+                // A rules/driver failure must never leave the room stuck in PLAYING: that would freeze
+                // every client and, worse, keep activeGames() above zero so a deploy drain never ends.
+                // Tear the room down instead. (Should be unreachable — apply() is trial-validated.)
+                logger.error("room $joinCode driver crashed; disbanding", e)
+                submit(RoomCommand.ForceDisband(DisbandReason.SERVER_SHUTDOWN))
             }
-            submit(RoomCommand.GameFinished(terminal))
         }
     }
 
@@ -299,7 +323,7 @@ class Room(
         // an illegal action and would kill the room coroutine.
         val illegal = runCatching { gameRules.apply(state, slot.seat, cmd.action) }.isFailure
         if (illegal) {
-            metrics.rejected(ErrorCode.ILLEGAL_ACTION)
+            abuseLog.log(AbuseLog.Event.ILLEGAL_ACTION, cmd.connection.remoteIp, "seat=${slot.seat.index}")
             return reject(cmd.connection, ErrorCode.ILLEGAL_ACTION, "Illegal action", fatal = false)
         }
         // Only remember it as accepted (for idempotency) if it actually reached the seat host —
@@ -315,7 +339,9 @@ class Room(
         driverJob = null
         metrics.gameCompleted()
         val winner = state.winner ?: -1
-        broadcastAll(GameOver(winner, state.scores))
+        val result = GameOver(winner, state.scores)
+        finalResult = result
+        broadcastAll(result)
         broadcastLobby()
     }
 
@@ -332,6 +358,7 @@ class Room(
         if (phase == RoomPhase.PLAYING) {
             slot.occupant = null
             slot.host?.occupant = null
+            slot.host?.interrupt() // don't make the table wait out the timeout on someone who left
             broadcastSeatStatus(slot.seat, OccupancyStatus.BOT_SUBSTITUTE)
         } else if (isCreator(cmd.connection)) {
             disband(DisbandReason.CREATOR_DISBANDED)
@@ -352,14 +379,15 @@ class Room(
     private fun onRematch(cmd: RoomCommand.Rematch) {
         if (!isCreator(cmd.connection)) return reject(cmd.connection, ErrorCode.NOT_CREATOR, "Only the creator")
         if (phase != RoomPhase.FINISHED) return reject(cmd.connection, ErrorCode.WRONG_PHASE, "Game not finished")
-        // Keep humans in their seats; drop bot-only seats back to open; clear ready + game state.
+        // Keep only still-connected humans; reopen every other seat fully (a game-fill bot, or a human
+        // who dropped and never reclaimed). Reopening via clearSlot also drops the departed player's
+        // stale ownerToken/binding, so they can't reconnect into a seat that is now a fresh-game bot.
         for (slot in slots) {
             slot.ready = false
             slot.host = null
-            if (slot.isBot) {
+            if (slot.occupant?.connected != true) {
                 slot.isBot = false
-                slot.name = null
-                slot.occupant = null
+                clearSlot(slot)
             }
         }
         rules = null
@@ -367,6 +395,8 @@ class Room(
         latestViews.clear()
         currentActor = null
         currentTurnDeadline = null
+        lastAccepted = null
+        finalResult = null
         phase = RoomPhase.LOBBY
         broadcastLobby()
     }
@@ -374,7 +404,14 @@ class Room(
     // --- Connection lifecycle ---------------------------------------------------------------------
 
     private fun onReconnect(cmd: RoomCommand.Reconnect) {
-        val slot = slots.getOrNull(cmd.seat.index) ?: return
+        val slot = slots.getOrNull(cmd.seat.index) ?: return failedResume(cmd.connection)
+        // The token must still own this seat. Otherwise the seat was reassigned (the player left and
+        // someone else took it, or a rematch reopened it) and honouring the stale binding would evict
+        // the rightful occupant and hand their hand to the wrong client. Refuse and reset that client.
+        if (slot.ownerToken != cmd.connection.sessionToken) {
+            sessionRegistry.clear(cmd.connection.sessionToken)
+            return failedResume(cmd.connection)
+        }
         val zombie = slot.occupant
         if (zombie != null && zombie.id != cmd.connection.id) zombie.requestClose()
         slot.occupant = cmd.connection
@@ -384,8 +421,16 @@ class Room(
         sessionRegistry.bind(cmd.connection.sessionToken, gameId, cmd.seat)
         deliver(cmd.connection, lobbyStateFor(cmd.connection))
         replayView(cmd.connection, cmd.seat)
+        finalResult?.let { deliver(cmd.connection, it) } // a late reconnector still sees the result
         if (phase == RoomPhase.PLAYING) broadcastSeatStatus(cmd.seat, OccupancyStatus.HUMAN)
         recomputeEmptiness()
+    }
+
+    /** Tell a client its resume can't be honoured (seat gone/reassigned) so it returns to entry. */
+    private fun failedResume(connection: PlayerConnection) {
+        connection.roomId = null
+        connection.seat = null
+        deliver(connection, LobbyDisbanded(DisbandReason.UNKNOWN))
     }
 
     private fun onDisconnected(cmd: RoomCommand.Disconnected) {
@@ -393,6 +438,7 @@ class Room(
         if (phase == RoomPhase.PLAYING) {
             slot.occupant = null
             slot.host?.occupant = null
+            slot.host?.interrupt() // wake a parked turn so the bot covers it now, not after the timeout
             broadcastSeatStatus(slot.seat, OccupancyStatus.BOT_SUBSTITUTE)
         } else {
             clearSlot(slot)
@@ -416,6 +462,7 @@ class Room(
         slot.occupant = connection
         slot.name = name
         slot.ready = false
+        slot.ownerToken = connection.sessionToken
         connection.roomId = gameId
         connection.seat = slot.seat
         sessionRegistry.bind(connection.sessionToken, gameId, slot.seat)
@@ -423,6 +470,10 @@ class Room(
 
     private fun clearSlot(slot: Slot) {
         slot.occupant?.let { detachConnection(it) }
+        // Forget the session→seat binding so a later reconnect with this token starts fresh instead
+        // of being re-seated into (or evicting whoever now holds) a seat it no longer owns.
+        slot.ownerToken?.let { sessionRegistry.clear(it) }
+        slot.ownerToken = null
         slot.occupant = null
         slot.name = null
         slot.ready = false
@@ -524,7 +575,10 @@ class Room(
     private fun disband(reason: DisbandReason) {
         if (closed) return
         broadcastAll(LobbyDisbanded(reason))
-        for (slot in slots) slot.occupant?.let { detachConnection(it) }
+        for (slot in slots) {
+            slot.occupant?.let { detachConnection(it) }
+            slot.ownerToken?.let { sessionRegistry.clear(it) } // don't leave bindings pointing at a dead room
+        }
         close()
     }
 

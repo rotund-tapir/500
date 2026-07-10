@@ -21,6 +21,8 @@ data class ServerConfig(
     val lobbiesPerIpPer10Min: Int = 5,
     val maxRooms: Int = 500,
     val maxFrameBytes: Long = 16 * 1024,
+    /** How long an untouched session token survives before the periodic sweep drops it. */
+    val sessionTtlMillis: Long = 60 * 60_000L,
     /** Relaxes IP caps and honours a client-supplied game seed. For local dev / e2e only. */
     val devMode: Boolean = false,
     /** Test hook: force the per-turn timeout to this many ms, ignoring the lobby's seconds setting. */
@@ -56,6 +58,7 @@ data class ServerConfig(
                 lobbiesPerIpPer10Min = int("LOBBIES_PER_IP_PER_10MIN", 5),
                 maxRooms = int("MAX_ROOMS", 500),
                 maxFrameBytes = long("MAX_FRAME_BYTES", 16 * 1024),
+                sessionTtlMillis = long("SESSION_TTL_MILLIS", 60 * 60_000L),
                 devMode = bool("DEV_MODE", false),
             )
         }

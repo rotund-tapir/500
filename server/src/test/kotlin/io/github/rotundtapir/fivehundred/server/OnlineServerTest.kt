@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 package io.github.rotundtapir.fivehundred.server
 
+import io.github.rotundtapir.fivehundred.ai.FiveHundredBot
 import io.github.rotundtapir.fivehundred.engine.Action
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.net.CreateLobby
 import io.github.rotundtapir.fivehundred.net.ErrorCode
 import io.github.rotundtapir.fivehundred.net.ErrorMessage
+import io.github.rotundtapir.fivehundred.net.GameOver
 import io.github.rotundtapir.fivehundred.net.Hello
 import io.github.rotundtapir.fivehundred.net.JoinLobby
+import io.github.rotundtapir.fivehundred.net.LeaveLobby
 import io.github.rotundtapir.fivehundred.net.LobbyState
 import io.github.rotundtapir.fivehundred.net.PROTOCOL_VERSION
 import io.github.rotundtapir.fivehundred.net.Platform
+import io.github.rotundtapir.fivehundred.net.RequestRematch
+import io.github.rotundtapir.fivehundred.net.RoomPhase
+import io.github.rotundtapir.fivehundred.net.SetName
 import io.github.rotundtapir.fivehundred.net.SetReady
 import io.github.rotundtapir.fivehundred.net.StartGame
 import io.github.rotundtapir.fivehundred.net.SubmitAction
@@ -19,32 +25,48 @@ import io.github.rotundtapir.fivehundred.net.ViewUpdate
 import io.github.rotundtapir.fivehundred.net.Welcome
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Executors
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class OnlineServerTest {
 
     private fun ApplicationTestBuilder.startServer(config: ServerConfig): Pair<GameServer, CoroutineScope> {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // A dedicated thread pool per server, shut down when the scope is cancelled, so a test that
+        // ends mid-game leaves no coroutines lingering on the shared Dispatchers.Default — otherwise
+        // ~15 sequential testApplication runs accumulate enough pressure to stall later ones.
+        val executor = Executors.newFixedThreadPool(4)
+        val job = SupervisorJob()
+        job.invokeOnCompletion { executor.shutdownNow() }
+        val scope = CoroutineScope(job + executor.asCoroutineDispatcher())
         val server = GameServer(config, scope)
         application { gameServerModule(server, config) }
         return server to scope
     }
 
+    // A modest turn timeout: long enough that normal in-process responses never trip it (so games
+    // play fast), short enough that a mid-play test tearing down doesn't leave a decide() parked for
+    // many seconds. If a slow runner does trip it, playWithBotUntilGameOver tolerates the STALE_ACTION.
     private fun devConfig(overrides: ServerConfig.() -> ServerConfig = { this }): ServerConfig =
-        ServerConfig(devMode = true, allowedOrigins = listOf("*"), turnTimeoutMillisOverride = 3000).overrides()
+        ServerConfig(devMode = true, allowedOrigins = listOf("*"), turnTimeoutMillisOverride = 5000).overrides()
 
     @Test
     fun `full 2p game with bot fill plays to completion`() = testApplication {
@@ -227,6 +249,217 @@ class OnlineServerTest {
                 assertNotNull(welcome.resumed, "expected to resume into the room")
                 withTimeout(TEST_TIMEOUT_MS) { waitFor<ViewUpdate>() }
             }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a duplicate of an accepted action is a silent no-op`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            client.webSocket("/ws") {
+                sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                waitFor<Welcome>()
+                sendMsg(CreateLobby("Alice", playerCount = 2, teamCount = 2, seed = 42))
+                val mySeat = assertNotNull(waitFor<LobbyState>().yourSeat)
+                sendMsg(SetReady(true))
+                waitForLobby { st -> st.seats.first { it.seat == mySeat }.ready }
+                sendMsg(StartGame)
+                // On our first turn, submit the very same action twice. The duplicate must be
+                // deduped (no ILLEGAL/STALE error), and the game must still play out.
+                val bot = FiveHundredBot()
+                val rng = Random(1)
+                var duplicated = false
+                val over = withTimeout(TEST_TIMEOUT_MS) {
+                    var result: GameOver? = null
+                    while (result == null) {
+                        when (val m = nextMsg()) {
+                            is GameOver -> result = m
+                            is ViewUpdate -> if (m.view.isMyTurn) {
+                                val action = bot.decide(m.view, rng)
+                                sendMsg(SubmitAction(m.stateVersion, action))
+                                if (!duplicated) {
+                                    sendMsg(SubmitAction(m.stateVersion, action)) // exact duplicate
+                                    duplicated = true
+                                }
+                            }
+                            is ErrorMessage -> error("duplicate must not be rejected: $m")
+                            else -> Unit
+                        }
+                    }
+                    result
+                }
+                assertTrue(duplicated)
+                assertTrue(over.winnerTeam in 0..1)
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `rematch reopens the bot seat and a second game plays`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            client.webSocket("/ws") {
+                sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                waitFor<Welcome>()
+                sendMsg(CreateLobby("Alice", playerCount = 2, teamCount = 2, seed = 42))
+                val mySeat = assertNotNull(waitFor<LobbyState>().yourSeat)
+                sendMsg(SetReady(true))
+                waitForLobby { st -> st.seats.first { it.seat == mySeat }.ready }
+                sendMsg(StartGame)
+                withTimeout(TEST_TIMEOUT_MS) { playWithBotUntilGameOver() }
+                sendMsg(RequestRematch)
+                // Back in the lobby with the previously-bot seat reopened and not ready.
+                val lobby = waitForLobby { it.phase == RoomPhase.LOBBY }
+                assertTrue(lobby.seats.none { it.isBot }, "bot seats should reopen on rematch")
+                assertTrue(lobby.seats.none { it.ready }, "ready flags should reset on rematch")
+                sendMsg(SetReady(true))
+                waitForLobby { st -> st.seats.first { it.seat == mySeat }.ready }
+                sendMsg(StartGame)
+                val over = withTimeout(TEST_TIMEOUT_MS) { playWithBotUntilGameOver(seed = 2) }
+                assertTrue(over.winnerTeam in 0..1)
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a six-player three-team game plays to completion`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            client.webSocket("/ws") {
+                sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                waitFor<Welcome>()
+                sendMsg(CreateLobby("Alice", playerCount = 6, teamCount = 3, seed = 11))
+                val mySeat = assertNotNull(waitFor<LobbyState>().yourSeat)
+                sendMsg(SetReady(true))
+                waitForLobby { st -> st.seats.first { it.seat == mySeat }.ready }
+                sendMsg(StartGame)
+                val playing = waitForLobby { it.phase == RoomPhase.PLAYING }
+                assertEquals(5, playing.seats.count { it.isBot }, "five seats fill with bots")
+                val over = withTimeout(TEST_TIMEOUT_MS) { playWithBotUntilGameOver() }
+                assertTrue(over.winnerTeam in 0..2, "three teams ⇒ winner in 0..2")
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a wrong protocol version is told to update`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            client.webSocket("/ws") {
+                sendMsg(Hello(protocolVersion = PROTOCOL_VERSION + 99, appVersion = "9.9.9", platform = Platform.WEB))
+                assertNotNull(waitFor<UpdateRequired>())
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `messages over the rate limit are rejected`() = testApplication {
+        // devMode off so the per-socket limiter runs; wildcard origin so the handshake still opens.
+        val (_, scope) = startServer(
+            ServerConfig(devMode = false, allowedOrigins = listOf("*"), messageRatePerSecond = 1, messageBurst = 2),
+        )
+        val client = createClient { install(WebSockets) }
+        try {
+            client.webSocket("/ws") {
+                sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                waitFor<Welcome>()
+                repeat(6) { sendMsg(SetName("spammer")) } // well over burst=2
+                val rateLimited = withTimeout(TEST_TIMEOUT_MS) {
+                    var seen = false
+                    while (!seen) {
+                        val m = nextMsg()
+                        if (m is ErrorMessage && m.code == ErrorCode.RATE_LIMITED) seen = true
+                    }
+                    seen
+                }
+                assertTrue(rateLimited, "a burst past the limit should yield RATE_LIMITED")
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a disallowed origin never gets a welcome`() = testApplication {
+        val (_, scope) = startServer(
+            ServerConfig(devMode = false, allowedOrigins = listOf("https://good.example")),
+        )
+        val client = createClient { install(WebSockets) }
+        try {
+            val welcomed = runCatching {
+                client.webSocket("/ws", request = { header(HttpHeaders.Origin, "https://evil.example") }) {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                    withTimeout(5_000) { waitFor<Welcome>() }
+                }
+            }.isSuccess
+            assertFalse(welcomed, "a disallowed Origin must be refused before any Welcome")
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a cleanly-left player's token no longer resumes the room`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            val code = CompletableDeferred<String>()
+            val aliceMayLeave = CompletableDeferred<Unit>()
+            coroutineScope {
+                // Alice keeps the room alive (in its own connection) until Bob is done.
+                launch {
+                    client.webSocket("/ws") {
+                        sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.ANDROID))
+                        waitFor<Welcome>()
+                        sendMsg(CreateLobby("Alice", playerCount = 2, teamCount = 2))
+                        code.complete(waitFor<LobbyState>().joinCode)
+                        aliceMayLeave.await()
+                    }
+                }
+                val bobToken = CompletableDeferred<String>()
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                    bobToken.complete(waitFor<Welcome>().sessionToken)
+                    sendMsg(JoinLobby(code.await(), "Bob"))
+                    waitFor<LobbyState>()
+                    sendMsg(LeaveLobby) // clean leave clears Bob's session binding
+                }
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB, sessionToken = bobToken.await()))
+                    assertEquals(null, waitFor<Welcome>().resumed, "a cleanly-left token must not resume")
+                }
+                aliceMayLeave.complete(Unit)
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `health endpoint reports the documented fields`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { }
+        try {
+            val body = client.get("/health").bodyAsText()
+            // The deploy drain loop greps "activeGames" out of this — pin the exact keys.
+            assertTrue(body.contains("\"status\":\"ok\""), body)
+            assertTrue(body.contains("\"rooms\":"), body)
+            assertTrue(body.contains("\"activeGames\":"), body)
+            assertTrue(body.contains("\"draining\":"), body)
         } finally {
             scope.cancel()
         }
