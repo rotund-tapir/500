@@ -43,6 +43,8 @@ application {
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // TEMPORARY (review): forward the live-VPS smoke-test target into the test JVM.
+    System.getProperty("vps.url")?.let { systemProperty("vps.url", it) }
 }
 
 // Integration-heavy; line coverage is harder here than in the pure engine. Start modest, ratchet up.
