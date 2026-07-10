@@ -106,10 +106,11 @@ class RoomRegistry(
         const val CODE_LENGTH = 4
         const val MAX_CODE_ATTEMPTS = 200
 
-        // Case-insensitive alphanumeric minus visually ambiguous glyphs (0/O, 1/I/L) so a code read
-        // off one screen and typed on another is unmistakable. 31 symbols ⇒ 31^4 ≈ 923k codes,
-        // ~14× the old 16^4 hex space; combined with CODE_SCAN abuse logging, scanning is impractical.
-        const val CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+        // Uppercase alphanumeric (codes are always uppercase) minus the glyphs that are ambiguous
+        // *in uppercase*: 0/O and 1/I. (L is kept — uppercase L is unmistakable; only lowercase "l"
+        // collides with 1/I.) 32 symbols ⇒ 32^4 ≈ 1.05M codes, ~16× the old 16^4 hex space; combined
+        // with CODE_SCAN abuse logging, scanning is impractical.
+        const val CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
         /** Normalise a user-typed code: trim, uppercase (the alphabet has no ambiguous glyphs to fold). */
         fun normalizeCode(code: String): String = code.trim().uppercase()
