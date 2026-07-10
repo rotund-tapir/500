@@ -5,13 +5,27 @@
 Direction, not commitment — items land when they're ready. Feedback and votes:
 [issues](https://github.com/rotundtapir/500/issues).
 
-## v0.1 — first release (in progress)
+## Shipped
 
-Offline 500 against bots: 2/4/6 players, misère & no-trumps house rules,
-interactive tutorial, FOSS + Play flavors. Play internal testing underway;
-F-Droid submission follows the first stable tag.
+- **v0.1 — offline 500 against bots.** 2/4/6 players, misère & no-trumps house
+  rules, interactive tutorial, FOSS + Play flavors.
+- **v0.2 — web build.** The same game playable in any modern browser
+  (Kotlin/Wasm) at <https://rotundtapir.github.io/500/>, deployed to GitHub
+  Pages on release tags.
+- **v0.3 — online multiplayer.** An authoritative hosted server (the `:server`
+  module) that runs the same `GameDriver` one room at a time, with the wire
+  protocol and client in `:net` and the lobby/online UI in `:shared`. Invite-code
+  lobbies, all four table shapes, bot fill-in, disconnect→bot substitution with
+  session-token seat reclaim, canned emotes, cross-play (Android ↔ web), a
+  configurable/self-hostable server URL, and CI deployment to the VPS on `v*`
+  tags. See `docs/multiplayer-architecture.md` and `docs/self-hosting.md`.
 
 ## Towards v1.0
+
+- **Online multiplayer follow-ups.** Extract the generic parts into
+  `cardkit-server` / `cardkit-net-client`; a public lobby browser; chat beyond
+  canned emotes; and rejoin that survives a server restart (state is in-memory
+  today, so a restart drops in-flight games).
 
 - **Remove-ads purchase fully disables the ads SDK** (play flavor). Today the
   purchase stops ads from loading or showing, but the Google Mobile Ads SDK is
@@ -21,17 +35,6 @@ F-Droid submission follows the first stable tag.
   ad servers at all. Touches the consent-before-ads and exactly-once
   interstitial invariants in `cardkit-monetization-play` — needs careful
   emulator verification of first-launch, purchase, and reinstall flows.
-
-- **Online multiplayer** *(landed — being stabilised)*. Implemented as the
-  authoritative hosted server the analysis (`docs/multiplayer-architecture.md`)
-  recommended: a Ktor/WebSocket server (`:server`) that runs the same
-  `GameDriver` one room at a time, with the wire protocol and client in a new
-  `:net` module and the lobby/online UI in `:shared`. Invite-code lobbies, all
-  four table flavours, bot fill-in, disconnect→bot substitution with
-  session-token seat reclaim, canned emotes, a configurable/self-hostable server
-  URL, and CI deployment to the VPS on `v*` tags. Still to do: extract the
-  generic parts into `cardkit-server` / `cardkit-net-client`, a public lobby
-  browser, chat beyond emotes, and cross-process-death rejoin.
 
 - **Stronger bot AI.** The current `FiveHundredBot` is heuristic (bid
   estimation, misère defence, simple card-play rules). Candidates, roughly in

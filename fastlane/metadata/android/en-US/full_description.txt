@@ -5,6 +5,7 @@ New to 500? The interactive tutorial deals you a real hand and coaches you throu
 Features:
 * Full Australian rules: a 43-card deck with the Joker, both bowers, a 3-card kitty, bidding from 6 to 10 tricks across the suits and no-trumps, plus Misère and Open Misère.
 * Play offline against capable AI opponents — no account, no network required.
+* Play online with friends: create or join a room with a short code, with cross-play between Android and the web. Any empty seats fill with bots, and if someone drops out a bot plays their hand until they rejoin. No account needed, and you can point the app at your own server.
 * Four ways to play: the classic 4-player partnership game, 2-player head-to-head, or 6 players as two teams of three or three teams of two.
 * Interactive tutorial that teaches by playing, not by reading.
 * House rules: switch Misère or no-trumps bidding off to match how your table plays.
