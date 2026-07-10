@@ -25,8 +25,9 @@ import io.github.rotundtapir.fivehundred.net.SubmitAction
 import io.github.rotundtapir.fivehundred.net.UpdateRequired
 import io.github.rotundtapir.fivehundred.net.Welcome
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -37,37 +38,53 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class GameServer(
     val config: ServerConfig,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     val metrics: Metrics = Metrics(),
     private val abuseLog: AbuseLog = AbuseLog(),
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
-    val sessionRegistry = SessionRegistry()
-    val rooms = RoomRegistry(config, scope, sessionRegistry, metrics, nowMillis)
+    val sessionRegistry = SessionRegistry(nowMillis = nowMillis)
+    val rooms = RoomRegistry(config, scope, sessionRegistry, metrics, abuseLog, nowMillis)
 
     private val connectionIds = AtomicLong()
-    private val connectionsPerIp = ConcurrentHashMap<String, AtomicInteger>()
+    private val connectionsPerIp = ConcurrentHashMap<String, Int>()
     private val lobbyThrottle =
         SlidingWindowCounter(LOBBY_WINDOW_MILLIS, config.lobbiesPerIpPer10Min, nowMillis)
 
     fun nextConnectionId(): Long = connectionIds.incrementAndGet()
 
-    /** Enforce the per-IP connection cap. Returns false (and logs) when [ip] is over the limit. */
-    fun tryOpenConnection(ip: String): Boolean {
-        if (config.devMode) return true
-        val count = connectionsPerIp.getOrPut(ip) { AtomicInteger() }
-        return if (count.incrementAndGet() <= config.maxConnectionsPerIp) {
-            true
-        } else {
-            count.decrementAndGet()
-            abuseLog.log(AbuseLog.Event.CONN_CAP, ip, "over ${config.maxConnectionsPerIp}")
-            false
+    /** Start background maintenance (currently: evicting stale session tokens). Call once at boot. */
+    fun startMaintenance() {
+        scope.launch {
+            val interval = (config.sessionTtlMillis / SESSION_SWEEPS_PER_TTL)
+                .coerceIn(MIN_SWEEP_INTERVAL_MILLIS, MAX_SWEEP_INTERVAL_MILLIS)
+            while (true) {
+                delay(interval)
+                sessionRegistry.evictStale(config.sessionTtlMillis)
+                lobbyThrottle.evictStale()
+            }
         }
     }
 
-    fun closeConnection(ip: String) {
-        connectionsPerIp[ip]?.let { if (it.decrementAndGet() <= 0) connectionsPerIp.remove(ip, it) }
+    /** Enforce the per-IP connection cap. Returns false (and logs) when [ip] is over the limit. */
+    fun tryOpenConnection(ip: String): Boolean {
+        if (config.devMode) return true
+        // merge + compute are both atomic per key and serialise against each other, so a concurrent
+        // open and close can't race the count into an inconsistent state (the old AtomicInteger +
+        // remove(k, v) pair could drop a just-incremented counter).
+        val count = connectionsPerIp.merge(ip, 1, Int::plus)!!
+        if (count <= config.maxConnectionsPerIp) return true
+        closeConnection(ip) // roll back this attempt's increment
+        abuseLog.log(AbuseLog.Event.CONN_CAP, ip, "over ${config.maxConnectionsPerIp}")
+        return false
     }
+
+    fun closeConnection(ip: String) {
+        connectionsPerIp.compute(ip) { _, current -> if (current == null || current <= 1) null else current - 1 }
+    }
+
+    /** Active connection count for [ip] — for tests. */
+    fun connectionsFor(ip: String): Int = connectionsPerIp[ip] ?: 0
 
     /** The verdict on a client's opening [Hello]. */
     sealed interface HelloResult {
@@ -132,7 +149,20 @@ class GameServer(
         roomOf(connection)?.submit(RoomCommand.Disconnected(connection))
     }
 
+    /** A frame was rejected by the socket rate limiter — record it (throttled) for fail2ban. */
+    fun onRateLimited(connection: PlayerConnection) {
+        metrics.rejected(ErrorCode.RATE_LIMITED)
+        if (connection.throttleAbuseLog(nowMillis())) abuseLog.log(AbuseLog.Event.RATE_LIMIT, connection.remoteIp)
+    }
+
+    /** A frame failed to decode — record it (throttled) for fail2ban. */
+    fun onMalformed(connection: PlayerConnection) {
+        metrics.rejected(ErrorCode.MALFORMED)
+        if (connection.throttleAbuseLog(nowMillis())) abuseLog.log(AbuseLog.Event.MALFORMED, connection.remoteIp)
+    }
+
     private fun handleCreate(connection: PlayerConnection, message: CreateLobby) {
+        if (alreadySeated(connection)) return
         if (!validName(connection, message.displayName)) return
         if (!validConfig(message.playerCount, message.teamCount)) {
             return deliver(connection, ErrorMessage(ErrorCode.BAD_CONFIG, "Unsupported player/team count"))
@@ -162,10 +192,22 @@ class GameServer(
     }
 
     private fun handleJoinLobby(connection: PlayerConnection, message: JoinLobby) {
+        if (alreadySeated(connection)) return
         if (!validName(connection, message.displayName)) return
         val room = rooms.find(message.code)
-            ?: return deliver(connection, ErrorMessage(ErrorCode.NO_SUCH_LOBBY, "No lobby with that code"))
+        if (room == null) {
+            // A stream of misses from one IP is a join-code scan — surface it so fail2ban can act.
+            abuseLog.log(AbuseLog.Event.CODE_SCAN, connection.remoteIp, message.code.take(CODE_LOG_LIMIT))
+            return deliver(connection, ErrorMessage(ErrorCode.NO_SUCH_LOBBY, "No lobby with that code"))
+        }
         room.submit(RoomCommand.Join(connection, message.displayName))
+    }
+
+    /** Refuse create/join while already seated elsewhere, so a connection is never in two rooms. */
+    private fun alreadySeated(connection: PlayerConnection): Boolean {
+        if (connection.roomId == null) return false
+        deliver(connection, ErrorMessage(ErrorCode.WRONG_PHASE, "Leave your current lobby first"))
+        return true
     }
 
     private inline fun forward(connection: PlayerConnection, command: () -> RoomCommand) {
@@ -194,5 +236,9 @@ class GameServer(
     private companion object {
         const val LOBBY_WINDOW_MILLIS = 10L * 60 * 1000
         const val NAME_LOG_LIMIT = 24
+        const val CODE_LOG_LIMIT = 8
+        const val SESSION_SWEEPS_PER_TTL = 4L
+        const val MIN_SWEEP_INTERVAL_MILLIS = 30_000L
+        const val MAX_SWEEP_INTERVAL_MILLIS = 15 * 60_000L
     }
 }

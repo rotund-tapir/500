@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 package io.github.rotundtapir.fivehundred.server
 
+import io.github.rotundtapir.cardkit.core.Seat
+import io.github.rotundtapir.fivehundred.net.LobbyConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ServerUnitTest {
@@ -40,6 +46,84 @@ class ServerUnitTest {
         assertTrue(counter.tryRecord("b"), "different key has its own budget")
         now += 1001
         assertTrue(counter.tryRecord("a"), "window slid; budget restored")
+    }
+
+    @Test
+    fun `sliding window evicts keys once their hits age out`() {
+        var now = 0L
+        val counter = SlidingWindowCounter(windowMillis = 1000, limit = 5) { now }
+        counter.tryRecord("a")
+        counter.tryRecord("b")
+        assertEquals(2, counter.keyCount())
+        now += 2000 // both keys' hits are now stale
+        counter.evictStale()
+        assertEquals(0, counter.keyCount(), "stale keys should be dropped by the sweep")
+    }
+
+    @Test
+    fun `session registry binds, looks up, clears, and evicts by TTL`() {
+        var now = 0L
+        val registry = SessionRegistry(nowMillis = { now })
+        val token = registry.newToken()
+        registry.bind(token, "game-1", Seat(2))
+        assertEquals("game-1", registry.lookup(token)?.gameId)
+        assertEquals(Seat(2), registry.lookup(token)?.seat)
+
+        registry.clear(token)
+        assertNull(registry.lookup(token), "a cleared token is forgotten")
+
+        val stale = registry.newToken()
+        val fresh = registry.newToken()
+        now += 1000
+        registry.lookup(fresh) // refresh fresh's TTL
+        now += 500
+        registry.evictStale(ttlMillis = 1000)
+        assertNull(registry.lookup(stale), "the untouched token is swept")
+        assertEquals(1, registry.size(), "the recently-touched token survives")
+    }
+
+    @Test
+    fun `per-IP connection cap admits up to the limit, refuses beyond, and frees on close`() {
+        val server = GameServer(
+            ServerConfig(devMode = false, maxConnectionsPerIp = 2),
+            CoroutineScope(SupervisorJob()),
+        )
+        assertTrue(server.tryOpenConnection("1.2.3.4"))
+        assertTrue(server.tryOpenConnection("1.2.3.4"))
+        assertFalse(server.tryOpenConnection("1.2.3.4"), "third over the cap of 2 is refused")
+        assertEquals(2, server.connectionsFor("1.2.3.4"), "a refused attempt is rolled back")
+        server.closeConnection("1.2.3.4")
+        assertTrue(server.tryOpenConnection("1.2.3.4"), "a freed slot admits a new connection")
+        assertTrue(server.tryOpenConnection("5.6.7.8"), "a different IP has its own budget")
+    }
+
+    @Test
+    fun `dev mode bypasses the per-IP connection cap`() {
+        val server = GameServer(ServerConfig(devMode = true, maxConnectionsPerIp = 1), CoroutineScope(SupervisorJob()))
+        repeat(10) { assertTrue(server.tryOpenConnection("1.2.3.4")) }
+    }
+
+    @Test
+    fun `join codes use only unambiguous characters and are unique`() {
+        // Each created room launches actor + idle-ticker coroutines on this scope; cancel it at the
+        // end so they don't leak onto Dispatchers.Default and starve other tests in the same JVM.
+        val scope = CoroutineScope(SupervisorJob())
+        try {
+            val registry = RoomRegistry(ServerConfig(devMode = true), scope, SessionRegistry(), Metrics(), AbuseLog())
+            val codes = (1..200).mapNotNull {
+                (registry.create("tok-$it", LobbyConfig(playerCount = 2, teamCount = 2), null)
+                    as? RoomRegistry.CreateResult.Created)?.room?.joinCode
+            }
+            assertEquals(200, codes.size)
+            assertEquals(codes.size, codes.toSet().size, "codes must be unique")
+            val forbidden = Regex("[^23456789ABCDEFGHJKMNPQRSTUVWXYZ]")
+            codes.forEach { code ->
+                assertEquals(4, code.length, "codes are 4 chars: $code")
+                assertFalse(forbidden.containsMatchIn(code), "no ambiguous glyphs (0/O/1/I/L) in $code")
+            }
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

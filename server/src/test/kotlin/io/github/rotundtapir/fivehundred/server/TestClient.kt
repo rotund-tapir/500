@@ -3,6 +3,7 @@ package io.github.rotundtapir.fivehundred.server
 
 import io.github.rotundtapir.fivehundred.ai.FiveHundredBot
 import io.github.rotundtapir.fivehundred.net.ClientMessage
+import io.github.rotundtapir.fivehundred.net.ErrorCode
 import io.github.rotundtapir.fivehundred.net.ErrorMessage
 import io.github.rotundtapir.fivehundred.net.GameOver
 import io.github.rotundtapir.fivehundred.net.LobbyState
@@ -29,7 +30,11 @@ suspend fun DefaultClientWebSocketSession.nextMsg(): ServerMessage {
     }
 }
 
-/** Receive until a message of type [T] arrives, returning it (discarding earlier messages). */
+/**
+ * Receive until a message of type [T] arrives, returning it (discarding earlier messages). Callers
+ * that need a bound wrap this in `withTimeout` themselves — a `withTimeout` here fires immediately
+ * under `testApplication`'s scheduler, which idle-advances virtual time while we wait on a real socket.
+ */
 suspend inline fun <reified T : ServerMessage> DefaultClientWebSocketSession.waitFor(): T {
     while (true) {
         val message = nextMsg()
@@ -59,7 +64,11 @@ suspend fun DefaultClientWebSocketSession.playWithBotUntilGameOver(seed: Long = 
                 val action = bot.decide(message.view, rng)
                 sendMsg(SubmitAction(message.stateVersion, action))
             }
-            is ErrorMessage -> error("server rejected a move mid-game: $message")
+            // A STALE_ACTION can legitimately occur if a slow runner let the turn timeout fire and the
+            // server's bot already played: our late move is simply obsolete, not a failure. The next
+            // ViewUpdate carries the true state. Any other error is a real problem.
+            is ErrorMessage ->
+                if (message.code != ErrorCode.STALE_ACTION) error("server rejected a move mid-game: $message")
             else -> Unit
         }
     }

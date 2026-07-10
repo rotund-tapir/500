@@ -5,6 +5,7 @@ import io.github.rotundtapir.fivehundred.net.LobbyConfig
 import kotlinx.coroutines.CoroutineScope
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.random.Random
 
 /**
  * The set of live rooms, indexed both by 4-character join code and by full game id. Also owns the
@@ -17,10 +18,14 @@ class RoomRegistry(
     private val scope: CoroutineScope,
     private val sessionRegistry: SessionRegistry,
     private val metrics: Metrics,
+    private val abuseLog: AbuseLog,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     private val byCode = ConcurrentHashMap<String, Room>()
     private val byGameId = ConcurrentHashMap<String, Room>()
+    // Codes are short lookup keys, not secrets — scan resistance comes from the alphabet size and the
+    // CODE_SCAN abuse log, not unpredictability — so a plain (non-blocking) RNG is the right choice.
+    private val codeRandom = Random.Default
 
     @Volatile
     var draining: Boolean = false
@@ -37,7 +42,7 @@ class RoomRegistry(
     fun activeGames(): Int = byCode.values.count { it.isPlaying() }
 
     /** Find a room by its (case-insensitive) join code. */
-    fun find(code: String): Room? = byCode[code.trim().uppercase()]
+    fun find(code: String): Room? = byCode[normalizeCode(code)]
 
     fun byGameId(gameId: String): Room? = byGameId[gameId]
 
@@ -54,10 +59,9 @@ class RoomRegistry(
         if (draining) return CreateResult.Draining
         if (byCode.size >= config.maxRooms) return CreateResult.ServerFull
         val gameId = UUID.randomUUID().toString()
-        val code = allocateCode() ?: return CreateResult.ServerFull
         val room = Room(
             gameId = gameId,
-            joinCode = code,
+            joinCode = "", // set once we successfully claim a code below
             creatorToken = creatorToken,
             initialConfig = lobbyConfig,
             requestedSeed = requestedSeed,
@@ -65,23 +69,33 @@ class RoomRegistry(
             config = config,
             sessionRegistry = sessionRegistry,
             metrics = metrics,
+            abuseLog = abuseLog,
             nowMillis = nowMillis,
             onClosed = ::remove,
         )
-        byCode[code] = room
+        if (!claimCode(room)) return CreateResult.ServerFull
         byGameId[gameId] = room
         room.start()
         return CreateResult.Created(room)
     }
 
-    /** A 4-hex-char prefix that is free. Retries on the rare collision; null if it can't find one. */
-    private fun allocateCode(): String? {
+    /**
+     * Atomically claim a free code for [room] via [ConcurrentHashMap.putIfAbsent] (so two concurrent
+     * creates can't collide on the same code), setting [Room.joinCode]. False if none is free.
+     */
+    private fun claimCode(room: Room): Boolean {
         repeat(MAX_CODE_ATTEMPTS) {
-            val code = UUID.randomUUID().toString().take(CODE_LENGTH).uppercase()
-            if (!byCode.containsKey(code)) return code
+            val code = randomCode()
+            if (byCode.putIfAbsent(code, room) == null) {
+                room.joinCode = code
+                return true
+            }
         }
-        return null
+        return false
     }
+
+    private fun randomCode(): String =
+        buildString(CODE_LENGTH) { repeat(CODE_LENGTH) { append(CODE_ALPHABET[codeRandom.nextInt(CODE_ALPHABET.length)]) } }
 
     private fun remove(room: Room) {
         byCode.remove(room.joinCode)
@@ -90,6 +104,14 @@ class RoomRegistry(
 
     private companion object {
         const val CODE_LENGTH = 4
-        const val MAX_CODE_ATTEMPTS = 100
+        const val MAX_CODE_ATTEMPTS = 200
+
+        // Case-insensitive alphanumeric minus visually ambiguous glyphs (0/O, 1/I/L) so a code read
+        // off one screen and typed on another is unmistakable. 31 symbols ⇒ 31^4 ≈ 923k codes,
+        // ~14× the old 16^4 hex space; combined with CODE_SCAN abuse logging, scanning is impractical.
+        const val CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+        /** Normalise a user-typed code: trim, uppercase (the alphabet has no ambiguous glyphs to fold). */
+        fun normalizeCode(code: String): String = code.trim().uppercase()
     }
 }

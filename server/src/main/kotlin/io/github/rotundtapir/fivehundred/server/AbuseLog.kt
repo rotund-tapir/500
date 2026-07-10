@@ -25,6 +25,7 @@ class AbuseLog {
         OVERSIZE_FRAME,
         VERSION_REJECT,
         SERVER_FULL,
+        CODE_SCAN,
     }
 
     fun log(event: Event, ip: String, detail: String = "") {

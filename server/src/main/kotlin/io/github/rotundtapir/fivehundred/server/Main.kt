@@ -30,6 +30,7 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger("main")
@@ -41,6 +42,7 @@ fun main() {
     val config = ServerConfig.fromEnv()
     val scope = CoroutineScope(SupervisorJob())
     val server = GameServer(config, scope)
+    server.startMaintenance()
     log.info("Starting 500 server on port {} (devMode={})", config.port, config.devMode)
     embeddedServer(CIO, port = config.port) {
         gameServerModule(server, config)
@@ -116,6 +118,10 @@ private suspend fun io.ktor.server.websocket.DefaultWebSocketServerSession.handl
         // The client vanished without a clean close frame — a phone backgrounding, a dropped network,
         // a closed tab. Routine churn, not a server fault: swallow it so it isn't logged as an ERROR
         // ("Websocket handler failed"). The finally below still runs the normal disconnect cleanup.
+    } catch (e: IOException) {
+        // Same routine churn surfaced differently: a ping timeout ("Ping timeout") or a reset socket
+        // arrives as an IOException. Log at debug, never ERROR — an unreachable phone is not a fault.
+        log.debug("socket closed abnormally: {}", e.message)
     } finally {
         server.closeConnection(ip)
         server.metrics.connectionClosed()
@@ -168,7 +174,7 @@ private fun io.ktor.server.websocket.DefaultWebSocketServerSession.pumpFrame(
     text: String,
 ) {
     if (!server.config.devMode && !limiter.tryAcquire()) {
-        server.metrics.rejected(ErrorCode.RATE_LIMITED)
+        server.onRateLimited(connection)
         connection.enqueue(ErrorMessage(ErrorCode.RATE_LIMITED, "Slow down"))
         return
     }
@@ -176,7 +182,7 @@ private fun io.ktor.server.websocket.DefaultWebSocketServerSession.pumpFrame(
     val message = runCatching { WireJson.decodeFromString<ClientMessage>(text) }.getOrNull()
     if (message == null) {
         // Log-only for now (per the v1 decision) — malformed frames don't drop the socket yet.
-        server.metrics.rejected(ErrorCode.MALFORMED)
+        server.onMalformed(connection)
         connection.enqueue(ErrorMessage(ErrorCode.MALFORMED, "Unrecognised message"))
         return
     }
