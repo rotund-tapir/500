@@ -1,1 +1,1 @@
-Play 500, the classic 4-player Australian trick-taking card game, against bots.
+Play 500, the Australian trick-taking card game — bots or friends online.

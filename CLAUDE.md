@@ -10,6 +10,12 @@ included here as a git submodule at `./cardkit`, wired into Gradle as a composit
 500-specific code lives in this repo; game-agnostic infrastructure lives in `cardkit`. The web build
 deploys to GitHub Pages (https://rotundtapir.github.io/500/) on `v*` release tags.
 
+Since **v0.3.0** the app also has **online multiplayer**: an authoritative hosted server (the `:server`
+module) that runs the same engine, with the wire protocol/client in `:net` and the lobby/online UI in
+`:shared`. Cross-play between Android (both flavors) and web; play offline vs bots or online with
+friends. The official server runs on a VPS behind Caddy and is deployed by CI on `v*` tags; it's also
+self-hostable (see `docs/self-hosting.md`).
+
 ## Toolchain (read first — non-obvious and will waste time otherwise)
 
 - **Gradle must run on JDK 21** (the machine default `java` is JDK 25, and the Android Gradle Plugin
@@ -28,9 +34,17 @@ deploys to GitHub Pages (https://rotundtapir.github.io/500/) on `v*` release tag
 
 ```bash
 # Pure-Kotlin logic (fast, no Android SDK needed) — the engine is the important part.
-# engine/ai/cardkit-core are Kotlin Multiplatform (jvm + wasmJs); unit tests live in jvmTest.
+# engine/ai/net/cardkit-core are Kotlin Multiplatform (jvm + wasmJs); unit tests live in jvmTest.
 ./gradlew :engine:jvmTest
 ./gradlew :ai:jvmTest
+./gradlew :net:jvmTest                    # wire-protocol golden/round-trip + Names validation
+
+# Online server (JVM). Unit + real-WebSocket integration tests (full bot-backed games, reconnect,
+# rematch, timeouts, abuse limits). Opt-in live smoke test against a deployed server:
+#   ./gradlew :server:test -Dvps.url=wss://500.29022617.xyz/ws   (skipped without -Dvps.url)
+./gradlew :server:test
+./gradlew :server:run                     # run the server locally (DEV_MODE=true relaxes limits)
+./gradlew :server:installDist             # what the Docker image / web online-e2e consume
 
 # A single test class (JUnit 5 platform)
 ./gradlew :engine:jvmTest --tests "io.github.rotundtapir.fivehundred.engine.TrickEvaluatorTest"
@@ -38,8 +52,10 @@ deploys to GitHub Pages (https://rotundtapir.github.io/500/) on `v*` release tag
 # Build both distribution flavors
 ./gradlew assembleFossDebug assemblePlayDebug
 
-# Lint (this is what CI runs via `build`; a pre-commit hook runs `lint jvmTest` too)
-./gradlew lint
+# Lint + static analysis (CI's `build` runs `qualityCheck lint`; the pre-commit hook runs
+# `qualityCheck lint jvmTest`). qualityCheck = detekt + CPD — the local `lint` task is Android-only,
+# so run qualityCheck too or detekt-only findings slip through to CI.
+./gradlew qualityCheck lint
 
 # On-device integration tests (Compose UI driving real games; ~2 min on the emulator).
 # Pin the serial or the task also grabs (and later uninstalls from) any attached phone.
@@ -56,7 +72,8 @@ ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedFossDebugAndroidTest
 # Web analogue of the test intent extras: ?seed=42&animationSpeed=OFF&soundVolume=0
 
 # Web E2E (Playwright over the production dist, served under the Pages /500/ prefix).
-# Build the distribution first; uses system Chrome (channel: 'chrome'), no browser download.
+# Build BOTH the web distribution AND :server:installDist first — the online spec boots a real
+# server (playwright.config webServer). Uses system Chrome (channel: 'chrome'), no browser download.
 cd web/e2e && npm ci && npx playwright test
 # Locate semantically but click via page.mouse at the locator's box centre — the canvas
 # intercepts pointer events, so plain .click() fails actionability. Playable cards are
@@ -64,7 +81,8 @@ cd web/e2e && npm ci && npx playwright test
 ```
 
 Enable the pre-commit hook once per clone: `git config core.hooksPath scripts/hooks` (runs
-`./gradlew lint jvmTest`; skips doc-only commits; auto-selects JDK 21; bypass with `--no-verify`).
+`./gradlew qualityCheck lint jvmTest`; skips doc-only commits; auto-selects JDK 21; bypass with
+`--no-verify`).
 
 ## Architecture
 
@@ -74,15 +92,25 @@ Most modules are Kotlin Multiplatform; `wasmJs` is the browser target throughout
   (Compose Multiplatform, android+wasmJs), `cardkit-monetization` (interface + FOSS/browser no-ops),
   `cardkit-monetization-play` (Google Ads + Billing, Android-only).
 - `engine/` — pure-Kotlin 500 rules, KMP jvm+wasmJs. **No Android or JVM-only imports** (the wasm
-  target won't compile a leak). This keeps the authoritative engine runnable server-side for future
-  online play. Unit tests live in `src/jvmTest`.
+  target won't compile a leak). This keeps the authoritative engine runnable server-side — which
+  online multiplayer now does. Unit tests live in `src/jvmTest`.
 - `ai/` — heuristic bot, pure Kotlin (KMP jvm+wasmJs), depends on `engine`.
-- `shared/` — the whole game UI (screens, `GameViewModel`, tutorial) as Compose Multiplatform common
-  code, android+wasmJs. Platform seams: `SettingsRepository` (interface; DataStore impl in its
-  androidMain, localStorage impl in `web/`) and `AppConfig`/`LocalAppConfig` (replaces BuildConfig
-  in shared code).
-- `app/` — the Android shell: `MainActivity` (intent-extra test overrides), flavors, monetization
-  providers. Depends on `shared`.
+- `net/` — the online wire protocol + client, KMP jvm+wasmJs, no Android/proprietary deps (reaches
+  both flavors and web). `Protocol.kt` (sealed `ClientMessage`/`ServerMessage` with stable
+  `@SerialName`s), `WireJson`, `Names` validation, and `GameClient`/`KtorGameClient` (expect/actual
+  Ktor client: CIO on jvm, Js on wasm).
+- `server/` — the authoritative online server, **JVM only** (Ktor CIO WebSocket app). Actor-per-`Room`
+  running the same `GameDriver`, `SeatHost` (the server-side `Player`, mirrors `ChannelPlayer`),
+  `SessionRegistry` (reconnect tokens), `RoomRegistry` (4-char join codes), anti-abuse (per-IP caps,
+  rate limits, origin check), `/health` + `/metrics`, graceful drain/shutdown. In-memory only — a
+  restart drops every game. Depends on `engine`/`ai`/`net`; no Compose, no Android. See also
+  `docs/multiplayer-architecture.md`, `docs/self-hosting.md`, `docs/server-runbook.md`.
+- `shared/` — the whole game UI (screens, `GameViewModel`, tutorial, and the online flow —
+  `OnlineViewModel`/`OnlineGameSession` + `ui/online/`) as Compose Multiplatform common code,
+  android+wasmJs. Platform seams: `SettingsRepository` (interface; DataStore impl in its androidMain,
+  localStorage impl in `web/`) and `AppConfig`/`LocalAppConfig` (replaces BuildConfig in shared code).
+- `app/` — the Android shell: `MainActivity` (intent-extra test overrides, incl. `EXTRA_SERVER_URL`),
+  flavors, monetization providers. Depends on `shared`.
 - `web/` — the browser shell: `ComposeViewport` entry, URL-param test overrides,
   `LocalStorageSettingsRepository`, `BrowserMonetization` wiring, and a DejaVu Sans symbol-subset
   fallback font (the wasm canvas has no system fonts — without it, ♠♥♦♣/⇄/⚙ render as tofu).
@@ -186,6 +214,13 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
   which publishes the wasm build to GitHub Pages (source is set to "GitHub Actions" in repo
   settings). `dependenciesInfo` is disabled — F-Droid rejects the
   Google-encrypted blob. Release stays un-minified until a release-QA pass justifies R8.
+- A `v*` tag also **ships the online server**: `publish-server-image` builds the `:server` dist into
+  a multi-arch image and pushes it to `ghcr.io/rotundtapir/500-server` (`:<version>` + `:latest`);
+  `deploy-server` then SSHes to the VPS, drains, pins `IMAGE_TAG`, and `docker compose pull && up`.
+  It needs the `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_PORT`/`DEPLOY_KNOWN_HOSTS` repo secrets (a
+  dedicated CI-only ed25519 key) and the GHCR package to be public; see `docs/server-runbook.md`.
+  Gotcha: re-deploying the *same* version leaves the box drained (`up -d` doesn't recreate an
+  unchanged image, so the drain flag persists) — undrain manually, or a new version recreates it.
 - fastlane metadata (`fastlane/metadata/android/en-US/`) is the store listing: `title.txt`,
   descriptions, `changelogs/<versionCode>.txt`, and `images/phoneScreenshots/`. Keep the changelog
   file in sync with `versionCode` bumps.

@@ -38,12 +38,18 @@ Commits without a `Signed-off-by` trailer will not be merged.
 
 ## Where code goes
 
-- **`engine/`** — pure Kotlin/JVM 500 rules (deck, bidding, trick evaluation,
-  scoring). No Android APIs; keep it deterministic and unit-tested.
-- **`ai/`** — bot strategy, pure Kotlin/JVM.
-- **`app/`** — the Android app (Jetpack Compose UI, ViewModels). Ads and billing
-  live only in the `play` source set / the `cardkit-monetization-play` module,
-  never in shared code.
+- **`engine/`** — pure Kotlin 500 rules (deck, bidding, trick evaluation,
+  scoring), KMP jvm+wasmJs. No Android APIs; keep it deterministic and unit-tested.
+- **`ai/`** — bot strategy, pure Kotlin (KMP jvm+wasmJs).
+- **`net/`** — online wire protocol + client (KMP jvm+wasmJs). No Android or
+  proprietary dependencies — it reaches both flavors and the web build.
+- **`server/`** — the authoritative online server (JVM Ktor). In-memory only;
+  depends on engine/ai/net, never on Compose or Android.
+- **`shared/`** — the Compose Multiplatform game UI (offline + online),
+  android+wasmJs.
+- **`app/`** — the Android shell. Ads and billing live only in the `play` source
+  set / the `cardkit-monetization-play` module, never in shared code.
+- **`web/`** — the browser (Kotlin/Wasm) shell.
 - Reusable, game-agnostic infrastructure belongs in `cardkit`, not here.
 
 Add a SPDX header to new source files:
@@ -53,11 +59,12 @@ Add a SPDX header to new source files:
 
 ```bash
 ./gradlew :engine:jvmTest           # fast, pure-Kotlin unit tests
+./gradlew :server:test              # online server tests (JVM)
 ./gradlew assembleFossDebug         # ad-free build
 ./gradlew assemblePlayDebug         # ad-supported build
 ```
 
-Requires JDK 21 and the Android SDK (`compileSdk 35`).
+Requires JDK 21 and, for the app modules, the Android SDK (`compileSdk 36`).
 
 ## Git hooks
 

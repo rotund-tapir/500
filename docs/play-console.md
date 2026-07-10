@@ -7,10 +7,23 @@ them whenever the Google Mobile Ads SDK is upgraded:
 - AdMob: <https://developers.google.com/admob/android/privacy/play-data-disclosure>
 - Data safety form reference: <https://support.google.com/googleplay/android-developer/answer/10787469>
 
-What the app itself does, for context: no accounts, no analytics or crash-reporting SDKs, no
-server of ours. Settings live in on-device DataStore (on-device processing — not "collected" in
-the form's sense). The only data leaving the device is what the Google Mobile Ads SDK (with UMP
-consent) and Google Play billing send to Google.
+What the app itself does, for context: no accounts, no analytics or crash-reporting SDKs. Settings
+live in on-device DataStore (on-device processing — not "collected" in the form's sense). Data
+leaving the device is: what the Google Mobile Ads SDK (with UMP consent) and Google Play billing
+send to Google, **plus** — only if the user opts into online multiplayer — a chosen display name,
+in-game moves, and connection metadata (IP) sent to the game server (see below).
+
+> **Online multiplayer (added v0.3.0) — revisit these declarations.** Online play is optional and
+> off by default; offline play sends nothing. When used, the app transmits a **user-chosen display
+> name** (not necessarily real; no email/phone/account) and **in-game moves** to the game server,
+> which also sees the **IP address** and uses it transiently for anti-abuse (rate/connection caps,
+> temporary fail2ban bans). No free-text chat (canned emotes only). The official server keeps state
+> **in memory only** — nothing persisted, no database. This is the app's *own* data flow, separate
+> from the ads SDK, so before the next Play submission confirm the Data safety form reflects it —
+> likely a **"Messages / Other in-app messages"** or **"App activity / Other user-generated content"**
+> row for the display name+emotes, and note IP handled for **security/anti-abuse**. The
+> deletion-request answer below stays defensible (no accounts, nothing persisted server-side), but
+> re-check it too.
 
 ## Data safety form
 

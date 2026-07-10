@@ -1,7 +1,9 @@
 # 500
 
-An Android app for **500**, the classic 4-player partnership trick-taking card
-game (Australian rules). Play against three AI opponents offline.
+An **Android and web** app for **500**, the classic 4-player partnership
+trick-taking card game (Australian rules). Play offline against AI opponents, or
+**online with friends** — cross-play between Android and the browser, with bots
+filling any empty seats. Play it now in your browser: **https://rotundtapir.github.io/500/**
 
 Built on the shared [`cardkit`](https://github.com/rotundtapir/cardkit) library
 (included here as a git submodule), the first of a suite of card-game apps.
@@ -17,13 +19,14 @@ Where it's heading: [ROADMAP.md](ROADMAP.md).
 The two are the `play` and `foss` build flavors. The F-Droid build excludes the
 `cardkit-monetization-play` module entirely, so it contains no non-free code.
 
-## Install
+## Install / play
 
-- **Google Play**: coming with the 0.1 release.
+- **Web**: play instantly at <https://rotundtapir.github.io/500/> — no install.
 - **GitHub**: signed ad-free APKs are attached to
   [releases](https://github.com/rotundtapir/500/releases) (sideload; updates keep
   the same signature).
-- **F-Droid**: submission planned after the first tagged release.
+- **Google Play**: internal testing (ad-supported flavor).
+- **F-Droid**: submission planned.
 
 Support development via [Liberapay](https://liberapay.com/rotund-tapir).
 
@@ -32,12 +35,15 @@ Support development via [Liberapay](https://liberapay.com/rotund-tapir).
 ```bash
 git clone --recurse-submodules <repo-url>
 cd 500
-./gradlew :engine:test          # run the rules engine unit tests (JDK 21, no Android SDK needed)
+./gradlew :engine:jvmTest       # run the rules engine unit tests (JDK 21, no Android SDK needed)
+./gradlew :server:test          # online server tests (JVM; real-WebSocket integration)
 ./gradlew assembleFossDebug     # ad-free debug APK
 ./gradlew assemblePlayDebug     # ad-supported debug APK
+./gradlew :web:wasmJsBrowserRun # run the web build locally (http://localhost:8080)
 ```
 
-Requires **JDK 21** and, for the app modules, the **Android SDK** (`compileSdk 35`).
+Requires **JDK 21** and, for the app modules, the **Android SDK** (`compileSdk 36`).
+See [`CLAUDE.md`](CLAUDE.md) for the full command list and the toolchain gotchas.
 
 ## Project layout
 
@@ -46,11 +52,16 @@ Requires **JDK 21** and, for the app modules, the **Android SDK** (`compileSdk 3
 ├── cardkit/     # shared library (git submodule), wired in via includeBuild
 ├── engine/      # pure-Kotlin 500 rules: deck, bidding, tricks, scoring
 ├── ai/          # heuristic bot strategy
-└── app/         # Jetpack Compose UI; foss/play flavors
+├── net/         # online wire protocol + client (KMP jvm+wasmJs)
+├── server/      # authoritative online server (JVM Ktor); Docker/deploy in server/deploy
+├── shared/      # Compose Multiplatform game UI (offline + online), android+wasmJs
+├── app/         # Android shell; foss/play flavors
+└── web/         # browser (Kotlin/Wasm) shell
 ```
 
 The rules engine is pure Kotlin with no Android dependency, so it is fully
-unit-tested and can run server-side if online multiplayer is added later.
+unit-tested and runs server-side — which is exactly what the online server does,
+driving the same engine one game room at a time.
 
 ## The game
 
