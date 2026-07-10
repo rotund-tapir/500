@@ -17,6 +17,11 @@ import kotlinx.serialization.Serializable
  *    values to each enum's `UNKNOWN` member.
  *  - **[PROTOCOL_VERSION] bumps only on a breaking change** (a field removal/retype, or a semantic
  *    change). The server advertises a supported range; a client outside it is told to update.
+ *
+ * NOTE: adding a value to an enum embedded in [PlayerView] (its `Phase`/`Trump`/`Suit`/`Rank`, which
+ * have no `UNKNOWN` sink) IS a breaking change for old clients — they would fail to decode the whole
+ * [ViewUpdate] and silently stall. Such an addition must bump [PROTOCOL_VERSION]. The wire enums in
+ * this file each carry an `UNKNOWN` member precisely so *they* can grow additively without a bump.
  */
 const val PROTOCOL_VERSION: Int = 1
 

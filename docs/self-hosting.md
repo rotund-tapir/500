@@ -19,6 +19,12 @@ docker run --rm -p 8080:8080 \
 
 Point native/desktop clients at `ws://<host-ip>:8080`.
 
+> **Only expose port 8080 on a trusted LAN.** The container serves `/admin/drain`, `/admin/undrain`,
+> and `/metrics` with no authentication — the production setup keeps them private by putting Caddy in
+> front (it 403s `/admin*` and `/metrics`) and publishing *no* host port for the server itself. If you
+> bind 8080 to a public interface, anyone can drain your server or read its metrics. Bind it to
+> `127.0.0.1:8080` or a LAN-only address, or front it with the Caddy setup below.
+
 > The web client hosted on GitHub Pages is served over HTTPS and browsers block plain `ws://` to a
 > non-localhost host (mixed content). Plain `ws://` therefore works for the Android app and for a
 > locally-served web build, but not for the public Pages site. For a browser over the internet you

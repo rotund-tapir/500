@@ -81,6 +81,10 @@ present, drains the server and reboots once games have finished (cap 1 h). Servi
   of the firewall. Only Caddy publishes ports.
 - fail2ban bans for proxied traffic must use the `DOCKER-USER` chain (already configured); the
   default INPUT-chain ban does nothing against forwarded packets.
+- **fail2ban bans are IPv4-only** as configured (`iptables-multiport[chain=DOCKER-USER]`). Docker
+  doesn't maintain `DOCKER-USER` for IPv6 by default, so an abusive IPv6 client is logged but not
+  banned. If you publish an AAAA record and see IPv6 abuse, either drop the AAAA or add an
+  `ip6tables`-based ban action — v6 banning is not yet wired up.
 - 1 GB RAM is tight (~700–850 MB steady). If it gets tight, drop `-Xmx256m` to `-Xmx192m` in the
   compose `JAVA_OPTS`.
 
