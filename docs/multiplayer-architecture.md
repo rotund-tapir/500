@@ -1,10 +1,14 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception -->
 # Online multiplayer: architecture analysis
 
-**Status: analysis only — no decision made, nothing here applies to v0.1.**
-Written 2026-07 to record the P2P-vs-hosted-server tradeoff discussion so it can be
-revisited when online play is scheduled. The engine seams referenced below
-(`GameRules.view`, `suspend Player.decide`, pure-JVM `engine`/`ai`) already exist and were
-designed with this in mind; see `CLAUDE.md` → "The engine is a pure state machine".
+**Status: DECIDED and IMPLEMENTED — the hosted-server option below was chosen and built.**
+This document is kept as the record of the P2P-vs-hosted-server tradeoff that led to that
+decision. The implementation lives in the `:net` and `:server` modules of *this* repo (the
+"future module layout" sketch further down, which placed them under `cardkit`, was not followed —
+they stayed here to iterate, with extraction to cardkit deferred). For the built design see
+`docs/self-hosting.md`, `docs/server-runbook.md`, and the module KDoc. The engine seams referenced
+below (`GameRules.view`, `suspend Player.decide`, pure-JVM `engine`/`ai`) are what made it a drop-in;
+see `CLAUDE.md` → "The engine is a pure state machine".
 
 ## The two candidate architectures
 

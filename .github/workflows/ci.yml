@@ -49,6 +49,11 @@ jobs:
       - name: Build web distribution (wasmJs)
         run: ./gradlew :web:wasmJsBrowserDistribution
 
+      # The online e2e spec boots a real game server; Playwright's webServer launches
+      # server/build/install/server/bin/server, so that dist must exist before the e2e step.
+      - name: Build server distribution (for online e2e)
+        run: ./gradlew :server:installDist
+
       # E2E smoke of the production wasm artifact: served under a /500/ prefix (the Pages
       # subpath), driven with Playwright against the runner's Chrome (WasmGC-capable).
       - name: Web E2E (Playwright)
@@ -178,6 +183,10 @@ jobs:
     needs: publish-server-image
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # Two tags pushed close together must not interleave drain/pin/up on the same box.
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - name: Set up SSH
@@ -197,6 +206,9 @@ jobs:
           ssh -p "${{ secrets.DEPLOY_PORT }}" -i ~/.ssh/id_ed25519 root@"${{ secrets.DEPLOY_HOST }}" bash -s <<EOF
           set -e
           cd /opt/500-server
+          # If anything below fails, undrain the OLD container so the box keeps serving instead of
+          # being stranded in drain mode (where every CreateLobby is refused but /health still 200s).
+          trap 'docker exec 500-server wget -qO- --post-data="" http://localhost:8080/admin/undrain || true' ERR
           docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/drain || true
           for i in \$(seq 1 30); do
             g=\$(docker exec 500-server wget -qO- http://localhost:8080/health 2>/dev/null | grep -o '"activeGames":[0-9]*' | grep -o '[0-9]*' || echo 0)
@@ -206,6 +218,9 @@ jobs:
           sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${VERSION}/" .env
           docker compose pull server
           docker compose up -d --wait
+          # The Caddyfile is a read-only bind mount, so a content change doesn't recreate the caddy
+          # container; reload it explicitly in case this deploy shipped Caddyfile changes.
+          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || docker compose restart caddy
           EOF
       - name: Verify health through Caddy
         run: |

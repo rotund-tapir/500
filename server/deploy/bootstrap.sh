@@ -3,9 +3,13 @@
 #
 # One-time (idempotent) host setup for the 500 game server on a fresh Debian 13 (trixie) VPS.
 # Run once as root, from this directory:   ./bootstrap.sh
-# Safe to re-run. It installs Docker + Caddy-via-compose prerequisites, a firewall, fail2ban,
-# unattended security upgrades, swap, and a drain-before-reboot timer. It does NOT deploy the app —
-# CI does that (docker compose pull && up). See docs/server-runbook.md.
+# It installs Docker + Caddy-via-compose prerequisites, a firewall, fail2ban, unattended security
+# upgrades, swap, and a drain-before-reboot timer. It does NOT deploy the app — CI does that
+# (docker compose pull && up). See docs/server-runbook.md.
+#
+# Re-running is supported for config tweaks, but note: re-applying the nftables ruleset and (if the
+# Docker daemon config changed) restarting Docker will briefly disrupt networking and END any live
+# games. Drain first (docs/server-runbook.md → Drain / undrain) before re-running on a live box.
 
 set -euo pipefail
 
@@ -16,24 +20,39 @@ fi
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SSH_PORT="${SSH_PORT:-51753}"
+SERVER_DOMAIN="${SERVER_DOMAIN:-500.29022617.xyz}"
 APP_DIR=/opt/500-server
 
 echo "==> Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y \
-	docker.io docker-compose-v2 \
+	docker.io docker-compose \
 	nftables fail2ban unattended-upgrades zram-tools \
 	rsync curl ca-certificates
 
-echo "==> Hardening SSH (key-only root; keep the custom port)"
+echo "==> Hardening SSH (listen on the custom port; go key-only once a key is installed)"
 install -d -m 755 /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/50-hardening.conf <<EOF
-PermitRootLogin prohibit-password
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-X11Forwarding no
-EOF
+# The firewall below only opens ${SSH_PORT}, so sshd MUST listen there (a fresh Debian defaults to
+# 22, which would then be unreachable). And we only disable password auth once /root/.ssh/
+# authorized_keys exists — otherwise a fresh box with no key installed would lock everyone out.
+{
+	echo "Port ${SSH_PORT}"
+	echo "X11Forwarding no"
+	echo "KbdInteractiveAuthentication no"
+	if [[ -s /root/.ssh/authorized_keys ]]; then
+		echo "PermitRootLogin prohibit-password"
+		echo "PasswordAuthentication no"
+	else
+		echo "# No /root/.ssh/authorized_keys yet: password auth left ON so you aren't locked out."
+		echo "# Add the deploy key, then re-run bootstrap (or edit this file) to switch to key-only."
+		echo "PermitRootLogin yes"
+		echo "PasswordAuthentication yes"
+	fi
+} > /etc/ssh/sshd_config.d/50-hardening.conf
+if [[ ! -s /root/.ssh/authorized_keys ]]; then
+	echo "    WARNING: no SSH key installed — leaving password auth ON. Add /root/.ssh/authorized_keys." >&2
+fi
 systemctl reload ssh || systemctl reload sshd || true
 
 echo "==> Firewall (nftables): drop input except lo/established/icmp and ssh/http/https"
@@ -60,9 +79,13 @@ nft -f /etc/nftables.conf
 
 echo "==> Docker: journald log driver (so fail2ban and docker logs both work)"
 install -d -m 755 /etc/docker
-cat > /etc/docker/daemon.json <<'EOF'
-{ "log-driver": "journald" }
-EOF
+DOCKER_CFG=/etc/docker/daemon.json
+NEW_DOCKER_CFG='{ "log-driver": "journald" }'
+docker_changed=0
+if [[ ! -f $DOCKER_CFG ]] || [[ "$(cat "$DOCKER_CFG")" != "$NEW_DOCKER_CFG" ]]; then
+	printf '%s\n' "$NEW_DOCKER_CFG" > "$DOCKER_CFG"
+	docker_changed=1
+fi
 mkdir -p /etc/systemd/journald.conf.d
 cat > /etc/systemd/journald.conf.d/size.conf <<'EOF'
 [Journal]
@@ -70,7 +93,12 @@ SystemMaxUse=200M
 EOF
 systemctl restart systemd-journald
 systemctl enable --now docker
-systemctl restart docker
+# Only restart Docker when its config actually changed — a blind restart on every re-run would kill
+# every running container (and any live game) for no reason.
+if [[ $docker_changed -eq 1 ]]; then
+	echo "    docker daemon.json changed — restarting Docker"
+	systemctl restart docker
+fi
 
 echo "==> fail2ban: sshd (custom port) + 500-server (journald)"
 cp "$HERE/fail2ban/500-server.conf" /etc/fail2ban/filter.d/500-server.conf

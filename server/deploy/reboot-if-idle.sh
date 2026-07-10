@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-cardkit-ads-exception
 #
 # Installed as /usr/local/sbin/500-reboot-if-idle.sh and run nightly by a systemd timer. If a kernel
-# security update has left /run/reboot-required, drain the game server (stop new lobbies), wait a
-# bounded time for active games to finish, then reboot. Applies security reboots without cutting a
-# game short mid-hand. A plain deploy uses the same /admin/drain endpoint (see the CI deploy job).
+# security update has left /run/reboot-required, drain the game server (stop new lobbies), wait up to
+# MAX_WAIT_SECONDS for active games to finish, then reboot. Games in progress at that cap ARE cut
+# short — the cap bounds how long a pending security patch is deferred. A plain deploy uses the same
+# /admin/drain endpoint (see the CI deploy job).
 
 set -euo pipefail
 
