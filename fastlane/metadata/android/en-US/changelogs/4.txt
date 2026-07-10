@@ -1,0 +1,1 @@
+Online fixes and polish: reopening your own invite link (or reloading, on the web) no longer drops you out of your lobby — your seat is held for a short grace period and you're returned straight to it. Clearer buttons and text fields on the online screens.
