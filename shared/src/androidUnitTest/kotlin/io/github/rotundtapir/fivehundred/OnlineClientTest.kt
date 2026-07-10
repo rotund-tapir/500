@@ -416,4 +416,31 @@ class OnlineViewModelTest {
         assertEquals(null, vm.pendingJoinCode.value)
         assertNotNull(vm.errorMessage.value)
     }
+
+    @Test
+    fun `a deep link to the lobby you're already in returns to it, not the join screen`() = runTest(dispatcher) {
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client)
+        vm.enter("ws://localhost", "0.3.0", Platform.WEB)
+        advanceUntilIdle()
+        client.push(Welcome("tok", "0.3.0"))
+        // We're the host, sitting in lobby AB12 (the lobby() helper's join code).
+        client.push(lobby(RoomPhase.LOBBY, listOf(seat(0, "Alice", ready = true))))
+        advanceUntilIdle()
+        assertEquals(OnlineScreen.LOBBY, vm.screen.value)
+
+        // Tapping our own invite link (same code, any case) returns us to the lobby — no Join screen,
+        // no prefilled code that would be refused as "already seated".
+        vm.enterWithJoinCode("ws://localhost", "0.3.0", Platform.WEB, "ab12")
+        advanceUntilIdle()
+        assertEquals(OnlineScreen.LOBBY, vm.screen.value)
+        assertEquals(null, vm.pendingJoinCode.value)
+
+        // A link to a *different* game still routes to the prefilled Join screen.
+        vm.enterWithJoinCode("ws://localhost", "0.3.0", Platform.WEB, "XY99")
+        advanceUntilIdle()
+        assertEquals(OnlineScreen.JOIN, vm.screen.value)
+        assertEquals("XY99", vm.pendingJoinCode.value)
+        vm.exit()
+    }
 }
