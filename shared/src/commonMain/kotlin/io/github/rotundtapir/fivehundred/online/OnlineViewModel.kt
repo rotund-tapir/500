@@ -155,6 +155,16 @@ class OnlineViewModel(
      * The player still confirms/sets their name and taps Join there — we never auto-join.
      */
     fun enterWithJoinCode(serverUrl: String, appVersion: String, platform: Platform, code: String) {
+        // Already in this very lobby/game (host or guest)? A link to it just returns you there,
+        // rather than a Join screen where re-joining would be refused (you already hold a seat) —
+        // which would otherwise strand the host on a dead-end screen.
+        val current = _lobby.value
+        if (current != null && current.joinCode.equals(code, ignoreCase = true)) {
+            _pendingRejoin.value = null
+            _pendingJoinCode.value = null
+            applyLobbyPhase(current)
+            return
+        }
         enter(serverUrl, appVersion, platform)
         if (_errorMessage.value != null) return // bad server URL — stay on entry showing the error
         _pendingJoinCode.value = code
