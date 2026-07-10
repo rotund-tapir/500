@@ -116,10 +116,10 @@ class ServerUnitTest {
             }
             assertEquals(200, codes.size)
             assertEquals(codes.size, codes.toSet().size, "codes must be unique")
-            val forbidden = Regex("[^23456789ABCDEFGHJKMNPQRSTUVWXYZ]")
+            val forbidden = Regex("[^23456789ABCDEFGHJKLMNPQRSTUVWXYZ]")
             codes.forEach { code ->
                 assertEquals(4, code.length, "codes are 4 chars: $code")
-                assertFalse(forbidden.containsMatchIn(code), "no ambiguous glyphs (0/O/1/I/L) in $code")
+                assertFalse(forbidden.containsMatchIn(code), "no uppercase-ambiguous glyphs (0/O/1/I) in $code")
             }
         } finally {
             scope.cancel()

@@ -30,8 +30,8 @@ test('connects to the server and creates a lobby', async ({ page }) => {
   await clickByRole(page, 'button', /^Create$/);
 
   // The server replied with a LobbyState: a 4-character join code and an open seat per empty spot.
-  // Codes use an unambiguous alphanumeric alphabet (no 0/1/I/L/O) — see RoomRegistry.CODE_ALPHABET.
-  await expect(page.getByText(/^[2-9A-HJKMNP-Z]{4}$/).first()).toBeVisible({ timeout: 15_000 });
+  // Codes use an unambiguous uppercase alphabet (no 0/1/I/O) — see RoomRegistry.CODE_ALPHABET.
+  await expect(page.getByText(/^[2-9A-HJ-NP-Z]{4}$/).first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Open seat').first()).toBeVisible();
   // The creator sees the Start control (empty seats will become bots).
   await expect(page.getByRole('button', { name: /^Start/ })).toBeVisible();
