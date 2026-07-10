@@ -59,6 +59,9 @@ self-hostable (see `docs/self-hosting.md`).
 
 # On-device integration tests (Compose UI driving real games; ~2 min on the emulator).
 # Pin the serial or the task also grabs (and later uninstalls from) any attached phone.
+# OnlineFlowTest needs a host-run server (DEV_MODE=true ./gradlew :server:run) — it self-skips
+# without one. CI runs this suite too (the android-e2e job, server started first); see
+# docs/e2e-coverage.md for the per-flow E2E matrix across web/Android/server.
 ANDROID_SERIAL=emulator-5554 ./gradlew :app:connectedFossDebugAndroidTest
 
 # CRITICAL F-Droid gate: the FOSS build must contain NO proprietary dependency.
@@ -200,9 +203,10 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
   app works from the GitHub Pages `/500/` subpath — keep that if resources ever 404 on Pages.
 - `viewModel { GameViewModel() }` (explicit initializer) is required: the reflection-based default
   ViewModel factory is JVM-only and throws on wasm.
-- Web-only known limits: page refresh loses an in-progress game (`rememberSaveable` is memory-only
-  on web) and the first sound needs a prior user gesture (browser autoplay policy — the "New Game"
-  tap qualifies).
+- Web-only known limits: page refresh loses an in-progress *local* game (`rememberSaveable` is
+  memory-only on web) — *online* lobbies/games survive a reload via the session token in
+  `sessionStorage` plus the server's lobby disconnect grace — and the first sound needs a prior
+  user gesture (browser autoplay policy — the "New Game" tap qualifies).
 
 ## Releasing
 

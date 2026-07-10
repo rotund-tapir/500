@@ -90,6 +90,7 @@ fun main() {
                     ),
                     nextSeed = { seedOverride ?: Random.nextLong() },
                     linkSharer = remember { BrowserLinkSharer() },
+                    sessionTokenStore = remember { SessionStorageTokenStore() },
                     joinCodeOverride = joinCodeOverride,
                     animationSpeedOverride = animationSpeedOverride,
                     soundVolumeOverride = soundVolumeOverride,

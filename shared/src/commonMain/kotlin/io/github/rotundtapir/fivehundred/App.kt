@@ -15,6 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.rotundtapir.cardkit.monetization.Monetization
 import io.github.rotundtapir.fivehundred.online.JoinLink
 import io.github.rotundtapir.fivehundred.online.OnlineViewModel
+import io.github.rotundtapir.fivehundred.online.SessionTokenStore
 import io.github.rotundtapir.fivehundred.ui.BotSetupScreen
 import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
@@ -55,8 +56,11 @@ fun FiveHundredApp(
     // default keeps the wasm-safe explicit initializer — a bare viewModel() uses the reflection
     // factory, which is JVM-only and throws on wasm.
     vm: GameViewModel = viewModel { GameViewModel() },
+    // Where the online session token outlives this composition (web: the tab's sessionStorage), so
+    // a page reload can resume its lobby/game seat. Defaults to in-memory only.
+    sessionTokenStore: SessionTokenStore = SessionTokenStore.None,
     // Explicit initializer for the same wasm reason as [vm]: the reflective factory throws on wasm.
-    onlineVm: OnlineViewModel = viewModel { OnlineViewModel() },
+    onlineVm: OnlineViewModel = viewModel { OnlineViewModel(tokenStore = sessionTokenStore) },
 ) {
     // Which top-level screen shows. Saveable so an in-progress game survives activity recreation;
     // the game itself lives in the ViewModel. (On web this degrades to remember {}.)

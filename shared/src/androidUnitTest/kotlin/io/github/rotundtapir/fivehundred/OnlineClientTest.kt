@@ -28,6 +28,7 @@ import io.github.rotundtapir.fivehundred.online.JoinLink
 import io.github.rotundtapir.fivehundred.online.OnlineGameSession
 import io.github.rotundtapir.fivehundred.online.OnlineScreen
 import io.github.rotundtapir.fivehundred.online.OnlineViewModel
+import io.github.rotundtapir.fivehundred.online.SessionTokenStore
 import io.github.rotundtapir.fivehundred.online.withOptimisticDiscard
 import io.github.rotundtapir.fivehundred.online.withOptimisticPlay
 import kotlinx.coroutines.CompletableDeferred
@@ -415,6 +416,106 @@ class OnlineViewModelTest {
         assertEquals(OnlineScreen.ENTRY, vm.screen.value)
         assertEquals(null, vm.pendingJoinCode.value)
         assertNotNull(vm.errorMessage.value)
+    }
+
+    private class FakeTokenStore(var token: String? = null) : SessionTokenStore {
+        override suspend fun load(): String? = token
+        override suspend fun save(token: String?) { this.token = token }
+    }
+
+    @Test
+    fun `the welcome's session token is persisted and a fresh instance reuses it`() = runTest(dispatcher) {
+        val store = FakeTokenStore()
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client, store)
+        vm.enter("ws://localhost", "0.3.0", Platform.WEB)
+        advanceUntilIdle()
+        client.push(Welcome("tok", "0.3.0"))
+        advanceUntilIdle()
+        assertEquals("tok", store.token, "the issued token must be persisted")
+        vm.exit()
+        advanceUntilIdle()
+
+        // A brand-new ViewModel over the same store — a web page reload — presents the persisted
+        // token in its Hello, which is what lets the server resume the seat (issue #11).
+        val client2 = FakeGameClient()
+        val vm2 = OnlineViewModel(client2, store)
+        vm2.enter("ws://localhost", "0.3.0", Platform.WEB)
+        advanceUntilIdle()
+        assertEquals("tok", client2.sent.filterIsInstance<Hello>().single().sessionToken)
+        vm2.exit()
+    }
+
+    @Test
+    fun `abandoning the resumed room clears the persisted token`() = runTest(dispatcher) {
+        val store = FakeTokenStore(token = "tok")
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client, store)
+        vm.enter("ws://localhost", "0.3.0", Platform.WEB)
+        advanceUntilIdle()
+        client.push(
+            Welcome("tok", "0.3.0", resumed = io.github.rotundtapir.fivehundred.net.ResumedState("AB12", RoomPhase.LOBBY)),
+        )
+        advanceUntilIdle()
+        assertNotNull(vm.pendingRejoin.value, "the resumed room is offered back")
+        vm.abandonGame()
+        advanceUntilIdle()
+        assertEquals(null, store.token, "declining the rejoin must erase the token")
+        assertEquals(OnlineScreen.ENTRY, vm.screen.value)
+        vm.exit()
+    }
+
+    @Test
+    fun `a fresh connection's welcome does not kick the deep-linked join screen back to entry`() = runTest(dispatcher) {
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client)
+        vm.enterWithJoinCode("ws://localhost", "0.3.0", Platform.WEB, "12AB")
+        advanceUntilIdle()
+        assertEquals(OnlineScreen.JOIN, vm.screen.value)
+        // The handshake completes with nothing to resume — we were never in a room, so the Join
+        // screen (and its prefilled code) must survive rather than reset with a stale-game banner.
+        client.push(Welcome("tok", "0.3.0"))
+        advanceUntilIdle()
+        assertEquals(OnlineScreen.JOIN, vm.screen.value)
+        assertEquals("12AB", vm.pendingJoinCode.value)
+        assertEquals(null, vm.errorMessage.value)
+        vm.exit()
+    }
+
+    @Test
+    fun `a deep link whose code matches the resumed room drops straight back in without a prompt`() = runTest(dispatcher) {
+        val store = FakeTokenStore(token = "tok")
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client, store)
+        // The host reopened their own invite link after a reload: the persisted token resumes the
+        // very room the link points at.
+        vm.enterWithJoinCode("ws://localhost", "0.3.0", Platform.WEB, "ab12")
+        advanceUntilIdle()
+        client.push(
+            Welcome("tok", "0.3.0", resumed = io.github.rotundtapir.fivehundred.net.ResumedState("AB12", RoomPhase.LOBBY)),
+        )
+        client.push(lobby(RoomPhase.LOBBY, listOf(seat(0, "Alice"))))
+        advanceUntilIdle()
+        assertEquals(null, vm.pendingRejoin.value, "no rejoin prompt on the way into the linked room")
+        assertEquals(null, vm.pendingJoinCode.value)
+        assertEquals(OnlineScreen.LOBBY, vm.screen.value, "straight back into the lobby")
+        vm.exit()
+    }
+
+    @Test
+    fun `a resume into a different room than the link still asks before rejoining`() = runTest(dispatcher) {
+        val store = FakeTokenStore(token = "tok")
+        val client = FakeGameClient()
+        val vm = OnlineViewModel(client, store)
+        vm.enterWithJoinCode("ws://localhost", "0.3.0", Platform.WEB, "XY99")
+        advanceUntilIdle()
+        client.push(
+            Welcome("tok", "0.3.0", resumed = io.github.rotundtapir.fivehundred.net.ResumedState("AB12", RoomPhase.LOBBY)),
+        )
+        advanceUntilIdle()
+        assertNotNull(vm.pendingRejoin.value, "a resume into a different room keeps the prompt")
+        assertEquals("XY99", vm.pendingJoinCode.value, "the link's code stays prefilled")
+        vm.exit()
     }
 
     @Test

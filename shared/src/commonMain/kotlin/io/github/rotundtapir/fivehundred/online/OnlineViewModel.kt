@@ -72,6 +72,9 @@ enum class OnlineScreen { ENTRY, CREATE, JOIN, LOBBY, GAME }
  */
 class OnlineViewModel(
     private val client: GameClient = KtorGameClient(),
+    // Where the session token survives this instance (web: the tab's sessionStorage), so a page
+    // reload can resume its seat. The default keeps it in memory only.
+    private val tokenStore: SessionTokenStore = SessionTokenStore.None,
 ) : ViewModel() {
 
     /** Kept in sync with the persisted setting by the host composable, exactly like GameViewModel. */
@@ -181,6 +184,9 @@ class OnlineViewModel(
         // The configured serverUrl is a host address; the protocol's WebSocket lives at /ws.
         val wsUrl = serverUrl.trimEnd('/') + WS_PATH
         connectJob = viewModelScope.launch {
+            // A fresh instance (a web page reload) starts with no token in memory; presenting the
+            // persisted one in the Hello is what lets the server resume our seat.
+            if (sessionToken == null) sessionToken = tokenStore.load()
             var backoff = INITIAL_BACKOFF_MILLIS
             while (isActive && !intentionalDisconnect) {
                 val hello = Hello(PROTOCOL_VERSION, appVersion, platform, sessionToken)
@@ -346,14 +352,25 @@ class OnlineViewModel(
 
     private fun onWelcome(welcome: Welcome) {
         sessionToken = welcome.sessionToken
+        viewModelScope.launch { tokenStore.save(welcome.sessionToken) }
         pendingSnapshot = welcome.resumed != null
-        // A resumed session means the server put us back in a live room. Offer the rejoin choice
-        // instead of jumping straight into it (see [pendingRejoin]).
-        _pendingRejoin.value = welcome.resumed
-        // If we thought we were in a room but the server can't resume us (it disbanded/restarted
-        // while we were offline — state is in-memory), don't leave the client frozen on a stale board.
-        // Reset to entry with a banner. A brand-new connection (screen already ENTRY) is untouched.
-        if (welcome.resumed == null && _screen.value != OnlineScreen.ENTRY) {
+        val resumed = welcome.resumed
+        // A resumed session means the server put us back in a live room. Normally we offer the
+        // choice (see [pendingRejoin]) — except when the resumed room is the very one a just-opened
+        // invite link points at (a host/guest reopening their own link, which on web is a full
+        // reload): asking "rejoin?" on the way into that exact room is noise, so drop straight back
+        // in. Navigation happens when the room's LobbyState lands.
+        if (resumed != null && resumed.joinCode.equals(_pendingJoinCode.value, ignoreCase = true)) {
+            _pendingJoinCode.value = null
+            _pendingRejoin.value = null
+        } else {
+            _pendingRejoin.value = resumed
+        }
+        // If we thought we were in a room (we hold its lobby state) but the server can't resume us
+        // (it disbanded/restarted while we were offline — state is in-memory), don't leave the
+        // client frozen on a stale board: reset to entry with a banner. A connection that was never
+        // in a room — including one sitting on a deep-linked Join screen — is untouched.
+        if (resumed == null && _lobby.value != null) {
             _lobby.value = null
             _gameOver.value = null
             session.reset()
@@ -395,6 +412,7 @@ class OnlineViewModel(
     fun abandonGame() {
         send(LeaveLobby)
         sessionToken = null
+        viewModelScope.launch { tokenStore.save(null) }
         _pendingRejoin.value = null
         _lobby.value = null
         _gameOver.value = null

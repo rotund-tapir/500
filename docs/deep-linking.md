@@ -21,6 +21,11 @@ Android's native share sheet, or copy-to-clipboard on web.
   `app/src/main/AndroidManifest.xml`). `MainActivity` reads `intent.data`'s `joinCode` (on cold
   start and via `onNewIntent`, since the activity is `singleTask`) and routes to the same prefilled
   Join screen. The player always chooses their name — we never auto-join.
+- **A link to a room you already hold a seat in** returns you to it instead of a Join screen. On
+  Android the running instance recognises its own lobby; on web — where opening a link in the same
+  tab is a full reload — the session token persisted in the tab's `sessionStorage` resumes the seat
+  (the server holds it through a short disconnect grace, `LOBBY_GRACE_MILLIS`), and a resume that
+  matches the link's code skips the rejoin prompt entirely.
 
 ## App Links verification (set up)
 
