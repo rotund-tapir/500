@@ -167,6 +167,10 @@ class Room(
             return
         }
         val validated = validateName(cmd.connection, cmd.displayName) ?: return
+        if (nameInUse(validated, except = null)) {
+            reject(cmd.connection, ErrorCode.NAME_TAKEN, "Someone in this lobby is already called $validated")
+            return
+        }
         val free = slots.firstOrNull { it.occupant == null && !it.isBot }
         if (free == null) {
             reject(cmd.connection, ErrorCode.LOBBY_FULL, "No free seats")
@@ -183,6 +187,10 @@ class Room(
         val slot = slotOf(cmd.connection) ?: return rejectNotInLobby(cmd.connection)
         if (phase != RoomPhase.LOBBY) return reject(cmd.connection, ErrorCode.WRONG_PHASE, "Cannot rename mid-game")
         val validated = validateName(cmd.connection, cmd.displayName) ?: return
+        // `except = slot` so changing only the casing of your own name is allowed.
+        if (nameInUse(validated, except = slot)) {
+            return reject(cmd.connection, ErrorCode.NAME_TAKEN, "Someone in this lobby is already called $validated")
+        }
         slot.name = validated
         broadcastLobby()
     }
@@ -521,6 +529,12 @@ class Room(
     private fun isCreator(connection: PlayerConnection): Boolean =
         connection.sessionToken == creatorToken
 
+    /** True if a slot other than [except] already holds [name], case-insensitively. */
+    private fun nameInUse(name: String, except: Slot?): Boolean {
+        val lower = name.lowercase()
+        return slots.any { it !== except && it.name?.lowercase() == lower }
+    }
+
     private fun validateName(connection: PlayerConnection, raw: String): String? {
         return when (val result = Names.validate(raw)) {
             is Names.Result.Ok -> result.name
@@ -629,9 +643,9 @@ class Room(
     fun resumedState(): ResumedState = ResumedState(joinCode, phase)
 
     private fun pickBotNames(count: Int): List<String> =
-        BOT_NAMES.shuffled(Random(joinCode.hashCode().toLong())).take(count.coerceAtLeast(0))
+        pickBotNames(BOT_NAMES, slots.mapNotNull { it.name }, count, Random(joinCode.hashCode().toLong()))
 
-    private companion object {
+    internal companion object {
         const val IDLE_CHECKS_PER_WINDOW = 6L
         const val MIN_IDLE_INTERVAL = 200L
         const val MAX_IDLE_INTERVAL = 60_000L
@@ -640,5 +654,14 @@ class Room(
             "Alice", "Bruce", "Cleo", "Dev", "Esther", "Frank", "Greta", "Hugo",
             "Ivy", "Jack", "Kira", "Leo", "Mona", "Nate", "Opal", "Wally",
         )
+
+        /**
+         * Pick [count] bot base names from [pool], never one that collides case-insensitively with a
+         * [taken] human name — a human "Jack" must not sit at a table with a "Jack (bot)".
+         */
+        fun pickBotNames(pool: List<String>, taken: Collection<String>, count: Int, random: Random): List<String> {
+            val takenLower = taken.map { it.lowercase() }.toSet()
+            return pool.filter { it.lowercase() !in takenLower }.shuffled(random).take(count.coerceAtLeast(0))
+        }
     }
 }

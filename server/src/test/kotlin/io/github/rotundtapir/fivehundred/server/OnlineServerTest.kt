@@ -108,6 +108,8 @@ class OnlineServerTest {
                 val playing = waitForLobby { it.phase.name == "PLAYING" }
                 assertEquals(3, playing.seats.count { it.isBot }, "three seats should be bots")
                 assertTrue(playing.seats.filter { it.isBot }.all { it.name.endsWith("(bot)") })
+                // "Alice" is in the bot-name pool; a seated human must keep it off the table.
+                assertTrue(playing.seats.none { it.name.equals("Alice (bot)", ignoreCase = true) })
                 val over = withTimeout(TEST_TIMEOUT_MS) { playWithBotUntilGameOver() }
                 assertTrue(over.winnerTeam in 0..1)
             }
@@ -180,6 +182,42 @@ class OnlineServerTest {
                 waitFor<Welcome>()
                 sendMsg(CreateLobby("admin", playerCount = 2, teamCount = 2))
                 assertEquals(ErrorCode.BAD_NAME, waitFor<ErrorMessage>().code)
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `a name already taken in the lobby is rejected case-insensitively`() = testApplication {
+        val (_, scope) = startServer(devConfig())
+        val client = createClient { install(WebSockets) }
+        try {
+            val code = CompletableDeferred<String>()
+            coroutineScope {
+                val joiner = launch {
+                    client.webSocket("/ws") {
+                        sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.WEB))
+                        waitFor<Welcome>()
+                        sendMsg(JoinLobby(code.await(), "alice"))
+                        assertEquals(ErrorCode.NAME_TAKEN, waitFor<ErrorMessage>().code)
+                        sendMsg(JoinLobby(code.await(), "Bob"))
+                        waitFor<LobbyState>()
+                        // Renaming onto another player's name is rejected too...
+                        sendMsg(SetName("ALICE"))
+                        assertEquals(ErrorCode.NAME_TAKEN, waitFor<ErrorMessage>().code)
+                        // ...but re-casing your own name is not a collision with yourself.
+                        sendMsg(SetName("BOB"))
+                        waitForLobby { st -> st.seats.any { it.name == "BOB" } }
+                    }
+                }
+                client.webSocket("/ws") {
+                    sendMsg(Hello(PROTOCOL_VERSION, "0.3.0", Platform.ANDROID))
+                    waitFor<Welcome>()
+                    sendMsg(CreateLobby("Alice", playerCount = 4, teamCount = 2))
+                    code.complete(waitFor<LobbyState>().joinCode)
+                    joiner.join() // keep the creator's socket (and the lobby) alive while the joiner asserts
+                }
             }
         } finally {
             scope.cancel()

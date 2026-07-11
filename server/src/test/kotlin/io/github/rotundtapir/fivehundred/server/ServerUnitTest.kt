@@ -15,6 +15,22 @@ import kotlin.test.assertTrue
 class ServerUnitTest {
 
     @Test
+    fun `bot names never collide with a seated human name, case-insensitively`() {
+        // Every seed, every count: a human "jack" (or "JACK") means no bot may be named Jack.
+        for (seed in 0L until 50L) {
+            val picked = Room.pickBotNames(
+                pool = Room.BOT_NAMES,
+                taken = listOf("jack", "ALICE", "Mona"),
+                count = 3,
+                random = kotlin.random.Random(seed),
+            )
+            assertEquals(3, picked.size)
+            assertEquals(3, picked.distinct().size, "bot names must be unique among themselves")
+            assertTrue(picked.none { it.lowercase() in setOf("jack", "alice", "mona") }, "picked=$picked")
+        }
+    }
+
+    @Test
     fun `version comparison handles differing segment counts`() {
         assertTrue(Versions.isAtLeast("0.3.0", "0.3.0"))
         assertTrue(Versions.isAtLeast("0.3.1", "0.3.0"))
