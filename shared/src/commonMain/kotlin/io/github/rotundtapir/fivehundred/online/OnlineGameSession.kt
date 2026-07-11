@@ -3,6 +3,7 @@ package io.github.rotundtapir.fivehundred.online
 
 import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.fivehundred.PacingGates
+import io.github.rotundtapir.fivehundred.engine.Phase
 import io.github.rotundtapir.fivehundred.engine.PlayerView
 import io.github.rotundtapir.fivehundred.net.ViewUpdate
 import kotlinx.coroutines.CoroutineScope
@@ -84,6 +85,10 @@ class OnlineGameSession(
     /** Clear state for a new game/rematch. */
     fun reset() {
         generation++
+        // A process() can be parked on a dead hand's reveal gate (awaitHandRevealed); its signals
+        // will never fire after pacing.reset(), so recycle the consumer rather than leave it — and
+        // its whole queue — wedged. start() cancels the old loop and opens a fresh one.
+        if (consumer != null) start()
         pacing.reset()
         previousActor = null
         optimisticPending = false
@@ -123,13 +128,23 @@ class OnlineGameSession(
         // Anchor the turn clock to when the view was *received*, before any bot-beat delay below, so
         // the countdown reflects the server's real deadline rather than lagging by the beat(s).
         val receivedAt = TimeSource.Monotonic.markNow()
-        // Online, pacing must NOT gate rendering: the local game's gates hold a *bot's decision*
-        // until an animation/tap signal, but here they would hold the *view* — and the signal only
-        // fires once that view renders, so a hold-tricks/deal gate would deadlock with no backstop.
-        // Instead we publish every view and just insert a short "beat" before someone else's move so
-        // it is visible (own moves and reconnect snapshots publish instantly). GameScreen still runs
-        // the deal animation and trick display off the published views.
+        // Online, pacing must generally NOT gate rendering: the local game's gates hold a *bot's
+        // decision* until an animation/tap signal, but here they would hold the *view* — and the
+        // signal only fires once that view renders, so a hold-tricks/deal gate would deadlock with
+        // no backstop. So we publish views with just a short "beat" before someone else's move
+        // (own moves and reconnect snapshots publish instantly), with the single safe exception
+        // below. GameScreen still runs the deal animation and trick display off published views.
         val instant = queued.snapshot || _views.value == null || optimisticPending
+        // The one exception to publish-everything: a view PAST the start of its hand waits until
+        // the hand is revealed on screen (previous result dialog dismissed + deal animated). The
+        // hand-start view itself is never held — it carries the result the dialog shows and
+        // triggers the deal — so the gate's signals are guaranteed to fire. Without this, the
+        // server-paced auction visibly advances behind the result dialog.
+        val handStartView = view.phase == Phase.BIDDING && view.biddingHistory.isEmpty()
+        if (!instant && view.winner == null && !handStartView) {
+            pacing.awaitHandRevealed(view)
+            if (gen != generation) return // reset() ran during the hold — dead game's view
+        }
         if (!instant && previousActor != null && previousActor != view.seat) {
             delay(pacing.botBeatMillis)
         }

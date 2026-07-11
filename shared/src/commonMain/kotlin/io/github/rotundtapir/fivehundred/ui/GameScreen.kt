@@ -109,15 +109,25 @@ fun GameScreen(
     // Screen rects of the tutorial's interaction targets (bid button, cards, felt), for the bubble.
     val tutorialAnchors = if (tutorial != null) remember { TutorialAnchors() } else null
     var lastAnimatedHand by rememberSaveable { mutableIntStateOf(0) }
+    // Highest hand whose deal has finished showing (or was skipped as a mid-hand snapshot). While
+    // view.handNumber is beyond this, the hand area renders NOTHING: a fresh hand held behind the
+    // result dialog must not flash its cards and bid ladder before the shuffle has run.
+    var dealtHand by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(view.handNumber) {
         if (animationSpeed == AnimationSpeed.OFF) return@LaunchedEffect
-        if (view.handNumber == lastAnimatedHand) return@LaunchedEffect
+        if (view.handNumber == lastAnimatedHand) {
+            // Recreation mid-hand: the deal was already shown (or abandoned) — never leave the
+            // hand area blanked waiting for an animation that won't replay.
+            dealtHand = maxOf(dealtHand, view.handNumber)
+            return@LaunchedEffect
+        }
         lastAnimatedHand = view.handNumber
         // Only animate a genuine hand start (empty auction and no cards played yet). A view first
         // seen mid-hand — an online (re)connection snapshot — must not replay the deal; just release
         // the pacing signal so play proceeds.
         val handStart = view.phase == Phase.BIDDING && view.biddingHistory.isEmpty() && view.currentTrick.isEmpty()
         if (!handStart) {
+            dealtHand = maxOf(dealtHand, view.handNumber)
             currentOnDealAnimationFinish(view.handNumber)
             return@LaunchedEffect
         }
@@ -126,6 +136,7 @@ fun GameScreen(
             snapshotFlow { resultAckedHand }.first { it >= view.handNumber }
         }
         runDealAnimation(dealState, view.playerCount, view.dealer, animationSpeed)
+        dealtHand = maxOf(dealtHand, view.handNumber)
         // Release the first bidder: the ViewModel waits on this signal, not a timer, so slow
         // devices can't start the auction mid-deal.
         currentOnDealAnimationFinish(view.handNumber)
@@ -181,6 +192,10 @@ fun GameScreen(
                         humanSeat = view.seat,
                         timings = dealTimings(animationSpeed),
                     )
+                } else if (animationSpeed != AnimationSpeed.OFF && view.handNumber > dealtHand) {
+                    // A fresh hand whose shuffle is still held behind the result dialog: keep the
+                    // new cards and bid ladder off screen until the deal actually runs.
+                    Box(Modifier.fillMaxWidth())
                 } else {
                     Box(Modifier.fillMaxWidth().tutorialTarget(seatAnchors, "seat:${view.seat.index}")) {
                         ActionArea(

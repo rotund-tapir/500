@@ -94,6 +94,27 @@ class PacingGates(
         }
     }
 
+    /**
+     * Online only: hold a view that is PAST the start of its hand until the hand has actually been
+     * revealed on screen — the previous hand's result dialog dismissed, then the deal animation
+     * finished. The local game never needs this (bots are gated BEFORE they act, so post-start
+     * states cannot exist early), but the online server plays on without waiting, and without this
+     * gate a fresh hand's auction visibly advances behind the result dialog. Inert at OFF; the
+     * deal wait carries the same recreation backstop as [awaitGates]; the ack wait is unbounded
+     * like the local game's (the dialog that fires it is on screen, rendered from the hand-start
+     * view that is never held).
+     */
+    suspend fun awaitHandRevealed(view: PlayerView) {
+        val speed = animationSpeed.value
+        if (speed == AnimationSpeed.OFF) return
+        if (view.lastHandResult != null && view.winner == null) {
+            handResultAcked.first { it >= view.handNumber }
+        }
+        withTimeoutOrNull(dealPauseMillis(speed) * DEAL_BACKSTOP_FACTOR) {
+            dealAnimationDone.first { it >= view.handNumber }
+        }
+    }
+
     private suspend fun awaitTrickGate(view: PlayerView) {
         val speed = animationSpeed.value
         if (view.currentTrick.isNotEmpty() || view.trickNumber <= 0 || speed == AnimationSpeed.OFF) return

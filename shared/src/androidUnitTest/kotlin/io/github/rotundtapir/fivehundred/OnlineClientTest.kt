@@ -5,8 +5,12 @@ import io.github.rotundtapir.cardkit.core.Rank
 import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.core.SuitedCard
 import io.github.rotundtapir.cardkit.core.Suit
+import io.github.rotundtapir.fivehundred.engine.Bid
+import io.github.rotundtapir.fivehundred.engine.Contract
+import io.github.rotundtapir.fivehundred.engine.HandResult
 import io.github.rotundtapir.fivehundred.engine.Phase
 import io.github.rotundtapir.fivehundred.engine.PlayerView
+import io.github.rotundtapir.fivehundred.engine.Trump
 import io.github.rotundtapir.fivehundred.net.ClientMessage
 import io.github.rotundtapir.fivehundred.net.ConnectionState
 import io.github.rotundtapir.fivehundred.net.CreateLobby
@@ -195,6 +199,105 @@ class OnlineGameSessionTest {
         advanceUntilIdle()
         session.revertOptimistic() // no optimistic move outstanding
         assertEquals(Seat(3), session.views.value?.toAct, "a stray revert must not disturb the view")
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+    }
+
+    /** Hand 2's result-carrying views, as the server streams them after hand 1 is scored. */
+    private fun nextHandViews(): Triple<ViewUpdate, ViewUpdate, ViewUpdate> {
+        val result = HandResult(
+            contract = Contract(Seat(1), Bid.Named(6, Trump.HEARTS)),
+            declarerTricks = 9,
+            made = true,
+            teamDeltas = mapOf(0 to 10, 1 to 100),
+        )
+        val handStart = ViewUpdate(
+            10,
+            testView(handNumber = 2, phase = Phase.BIDDING, lastHandResult = result),
+            turnRemainingMillis = null,
+        )
+        val firstBid = ViewUpdate(
+            11,
+            testView(
+                handNumber = 2,
+                phase = Phase.BIDDING,
+                lastHandResult = result,
+                biddingHistory = listOf(Seat(1) to Bid.Pass),
+                toAct = Seat(2),
+            ),
+            turnRemainingMillis = null,
+        )
+        val secondBid = ViewUpdate(
+            12,
+            testView(
+                handNumber = 2,
+                phase = Phase.BIDDING,
+                lastHandResult = result,
+                biddingHistory = listOf(Seat(1) to Bid.Pass, Seat(2) to Bid.Pass),
+                toAct = Seat(3),
+            ),
+            turnRemainingMillis = null,
+        )
+        return Triple(handStart, firstBid, secondBid)
+    }
+
+    @Test
+    fun `views past a hand's start hold until the result is acked and the deal has run`() = runTest {
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        val gates = PacingGates(MutableStateFlow(AnimationSpeed.NORMAL), MutableStateFlow(false))
+        val session = OnlineGameSession(gates, scope)
+        session.start()
+        // Mid-hand snapshot of hand 1 (pre-acknowledged like OnlineViewModel does for snapshots).
+        val snapshot = testView(handNumber = 1, phase = Phase.PLAY, trickNumber = 5, toAct = Seat(0))
+        gates.preAcknowledge(snapshot)
+        session.offer(ViewUpdate(9, snapshot, turnRemainingMillis = null), snapshot = true)
+        advanceUntilIdle()
+
+        // Hand 2 starts: the hand-start view (carrying hand 1's result) is published unheld,
+        // but the bots' bids behind it must NOT surface while the result dialog is unacked.
+        val (handStart, firstBid, secondBid) = nextHandViews()
+        session.offer(handStart, snapshot = false)
+        session.offer(firstBid, snapshot = false)
+        session.offer(secondBid, snapshot = false)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(10, session.authoritativeStateVersion.value, "auction must not advance behind the dialog")
+        assertTrue(session.views.value?.biddingHistory.orEmpty().isEmpty())
+
+        // Dismissing the dialog alone is not enough — the deal still has to animate.
+        gates.acknowledgeHandResult(2)
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(10, session.authoritativeStateVersion.value, "deal must finish before bids show")
+
+        gates.dealAnimationFinished(2)
+        advanceUntilIdle()
+        assertEquals(12, session.authoritativeStateVersion.value, "acked + dealt releases the held bids")
+        assertEquals(2, session.views.value?.biddingHistory?.size)
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+    }
+
+    @Test
+    fun `reset releases a consumer parked on the reveal gate`() = runTest {
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        val gates = PacingGates(MutableStateFlow(AnimationSpeed.NORMAL), MutableStateFlow(false))
+        val session = OnlineGameSession(gates, scope)
+        session.start()
+        val snapshot = testView(handNumber = 1, phase = Phase.PLAY, trickNumber = 5, toAct = Seat(0))
+        gates.preAcknowledge(snapshot)
+        session.offer(ViewUpdate(9, snapshot, turnRemainingMillis = null), snapshot = true)
+        advanceUntilIdle()
+        val (handStart, firstBid, _) = nextHandViews()
+        session.offer(handStart, snapshot = false)
+        session.offer(firstBid, snapshot = false) // parks on the reveal gate (no ack, no deal)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(10, session.authoritativeStateVersion.value)
+
+        // Leave/rematch: the parked view belongs to a dead game and must not wedge the next one.
+        session.reset()
+        session.offer(ViewUpdate(1, testView(handNumber = 1), turnRemainingMillis = null), snapshot = true)
+        advanceUntilIdle()
+        assertEquals(1, session.authoritativeStateVersion.value, "a fresh game's views flow after reset")
         scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 }
