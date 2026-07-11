@@ -256,17 +256,19 @@ internal fun FlyingDealCard(state: DealAnimationState) {
     }
 }
 
-private val KittyCardWidth = 32.dp
-private val KittyFanStep = 18.dp
+// Kitty cards match the trick cards' width (TrickPlayCell / EmptyTrickSlot use 56.dp) and sit side
+// by side like a trick — overlapped backs just read as one wide card with slivers.
+private val KittyCardWidth = 56.dp
+private val KittyCardGap = 6.dp
 
-/** A small fanned pile of [count] face-down cards labelled "Kitty"; holds its 3-card footprint. */
+/** The [count] face-down kitty cards, trick-sized and side by side, growing centred as they land. */
 @Composable
 internal fun KittyPile(count: Int, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Box {
-            Spacer(Modifier.size(KittyCardWidth + KittyFanStep * 2, KittyCardWidth * 1.4f))
-            repeat(count) { i ->
-                Box(Modifier.offset(x = KittyFanStep * i)) { CardBack(width = KittyCardWidth) }
+        Box(contentAlignment = Alignment.Center) {
+            Spacer(Modifier.size(KittyCardWidth * 3 + KittyCardGap * 2, KittyCardWidth * 1.4f))
+            Row(horizontalArrangement = Arrangement.spacedBy(KittyCardGap)) {
+                repeat(count) { CardBack(width = KittyCardWidth) }
             }
         }
         Spacer(Modifier.height(4.dp))

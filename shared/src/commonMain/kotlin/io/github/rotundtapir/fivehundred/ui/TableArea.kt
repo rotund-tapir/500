@@ -351,7 +351,9 @@ internal fun TrickArea(
                         TrickPlaysRow(v, botNames, lastTrick.plays)
                         Spacer(Modifier.height(4.dp))
                         Text("${seatLabel(v, botNames, lastTrick.winner)} won the trick")
-                        if (holdingTrick) {
+                        // In the tutorial (forceHold) the guidance bubble already says "Tap the
+                        // trick to continue" and can sit over this spot — skip the duplicate hint.
+                        if (holdingTrick && !forceHold) {
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 "tap to continue",

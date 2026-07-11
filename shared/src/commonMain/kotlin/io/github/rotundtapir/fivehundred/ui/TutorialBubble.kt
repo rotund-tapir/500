@@ -71,11 +71,11 @@ internal fun TutorialBubble(
     val trickHeld = view.phase == Phase.PLAY && view.currentTrick.isEmpty() &&
         lastTrick != null && !view.isMyTurn
     val text = when {
-        step == null -> "That's the whole hand — see how it scored."
+        step == null -> "That's the whole hand. See how it scored."
         isHumanDecision -> step.advice
         trickHeld -> tutorialTrickNotes[view.trickNumber]
-            ?: "${seatLabel(view, botNames, lastTrick!!.winner)} won the trick — tap it to continue."
-        else -> "Watch the table — the other players are acting…"
+            ?: "${seatLabel(view, botNames, lastTrick.winner)} won the trick; tap it to continue."
+        else -> "Watch the table while the other players act…"
     }
     val targetKey = when {
         !isHumanDecision -> "trick"

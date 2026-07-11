@@ -56,7 +56,7 @@ data class TutorialPage(val title: String, val body: String)
 /** The primer's hand-over page: what the scripted tutorial hand is about to do. */
 const val TUTORIAL_INTRO =
     "Now see it in play. You'll play one practice hand against three bots, guided at every " +
-        "decision — what to bid, what to discard, and which card to play, with the reason why. " +
+        "decision: what to bid, what to discard, and which card to play, with the reason why. " +
         "Only the recommended move is enabled at each step, so you can't go wrong."
 
 /**
@@ -74,9 +74,9 @@ val tutorialPrologue: List<TutorialPage> = listOf(
     ),
     TutorialPage(
         title = "What's a trick?",
-        body = "One card from each player, played in turn around the table — that's a trick, " +
-            "and the best card takes all four. You must play a card of the suit that was led " +
-            "whenever you have one. The highest card of that suit wins the trick — unless a " +
+        body = "A trick is one card from each player, played in turn around the table, and the " +
+            "best card takes all four. You must play a card of the suit that was led " +
+            "whenever you have one. The highest card of that suit wins the trick, unless a " +
             "player with none of the suit plays a trump, which beats everything. Whoever wins " +
             "a trick leads the next. Ten cards each means every hand is a fight over exactly " +
             "10 tricks.",
@@ -88,14 +88,14 @@ val tutorialPrologue: List<TutorialPage> = listOf(
             "the contract, and the winning bidder gets a reward: the kitty, the 3 cards left " +
             "over from the deal, picked up into hand with any 3 cards discarded in return. " +
             "Make the contract and your team scores its value; fall short and you lose that " +
-            "much instead — while the defending team scores 10 points for every trick it takes.",
+            "much instead, while the defending team scores 10 points for every trick it takes.",
     ),
     TutorialPage(
         title = "Sizing up a hand",
         body = "Bid only what your cards can back up. Count your likely winners: the Joker " +
             "(the highest trump in the game), high trumps, aces, and the extra tricks a long " +
             "trump suit brings once everyone else runs out. Then allow roughly one more for " +
-            "help you can't see yet — the kitty will improve your hand, and your partner's " +
+            "help you can't see yet: the kitty will improve your hand, and your partner's " +
             "cards usually chip in. Six winners in hand is a sound bid of 7. Nothing high and " +
             "no long suit? Pass, and score 10 a trick defending while the other side " +
             "overreaches.",
@@ -110,14 +110,14 @@ val tutorialPrologue: List<TutorialPage> = listOf(
 val tutorialEpilogue: List<TutorialPage> = listOf(
     TutorialPage(
         title = "One more bid: Misère",
-        body = "Misère is a contract to win NO tricks at all — worth 250 points if you manage " +
+        body = "Misère is a contract to win NO tricks at all, worth 250 points if you manage " +
             "it. It's played with no trumps, your partner sits the hand out, and it can only " +
             "be bid once the auction has reached seven (7♠ or higher). Tempting when your hand " +
             "is nothing but low cards.",
     ),
     TutorialPage(
         title = "And no-trumps",
-        body = "You can also bid with no trump suit at all (6NT up to 10NT — the top of each " +
+        body = "You can also bid with no trump suit at all (6NT up to 10NT, the top of each " +
             "level). With no trumps there are no bowers: the highest card of the led suit wins " +
             "every trick, except the Joker, which is the one and only trump. 10NT is the most " +
             "valuable contract in the game at 520 points.",
@@ -127,7 +127,7 @@ val tutorialEpilogue: List<TutorialPage> = listOf(
 /** Shown after the scripted hand has been scored. */
 const val TUTORIAL_COMPLETION =
     "You bid 7♠, drew trumps with the Joker and the bowers, and took eight tricks with your " +
-        "partner — contract made, +140 points. You've now seen bidding, the kitty exchange, " +
+        "partner: contract made, +140 points. You've now seen bidding, the kitty exchange, " +
         "the bowers, following suit, and playing with a partner. " +
         "Start a real game from the home screen when you're ready!"
 
@@ -138,11 +138,11 @@ const val TUTORIAL_COMPLETION =
 val tutorialSteps: List<TutorialStep> = listOf(
     TutorialStep.BidStep(
         bid = Bid.Named(7, Trump.SPADES),
-        advice = "Time to bid — count your likely winners. The Joker, the J♠ (the \"right " +
-            "bower\" — more on that soon), K♠, 10♠ and 9♠ are five strong spades; the A♥ " +
+        advice = "Time to bid: count your likely winners. The Joker, the J♠ (the \"right " +
+            "bower\", more on that soon), K♠, 10♠ and 9♠ are five strong spades; the A♥ " +
             "makes six. The seventh? Winning the auction gets you the kitty's three cards to " +
             "improve your hand, and your partner's cards usually chip in a trick or so. " +
-            "Everyone else has passed — bid 7♠.",
+            "Everyone else has passed, so bid 7♠.",
     ),
     TutorialStep.DiscardStep(
         cards = listOf(
@@ -151,25 +151,25 @@ val tutorialSteps: List<TutorialStep> = listOf(
             Rank.EIGHT of Suit.CLUBS,
         ),
         advice = "Winning the auction gave you the kitty: Q♣, 8♣ and K♥. Keep every trump and " +
-            "your high cards — throw the three weakest odd cards, the 5♣, 7♦ and 8♣. " +
+            "your high cards, and throw the three weakest odd cards: the 5♣, 7♦ and 8♣. " +
             "Short side suits let you trump those suits sooner. " +
             "Swipe the hand sideways if a card is out of view.",
     ),
     TutorialStep.PlayStep(
         card = Joker,
-        advice = "As declarer you lead the first trick. Start with the Joker — the highest trump " +
+        advice = "As declarer you lead the first trick. Start with the Joker, the highest trump " +
             "in the game. It cannot lose, and it pulls a trump out of every other hand.",
     ),
     TutorialStep.PlayStep(
         card = Rank.JACK of Suit.SPADES,
         advice = "Now the most important rule in 500: in the trump suit, the JACKS OUTRANK THE " +
-            "ACE. Your J♠ is the \"right bower\" — the second-highest trump after the Joker. " +
+            "ACE. Your J♠ is the \"right bower\", the second-highest trump after the Joker. " +
             "Lead it, and even the A♠ cannot beat it. Watch it happen.",
         showTrumpOrder = true,
     ),
     TutorialStep.PlayStep(
         card = Rank.KING of Suit.SPADES,
-        advice = "Same rule, other Jack: the J♣ is not really a club — as the other BLACK Jack " +
+        advice = "Same rule, other Jack: the J♣ is not really a club. As the other BLACK Jack " +
             "it becomes a spade, the \"left bower\", the third-highest trump. It's still out " +
             "there, and it beats your K♠. Lead the King anyway: losing it now flushes the last " +
             "big trump for cheap.",
@@ -178,38 +178,38 @@ val tutorialSteps: List<TutorialStep> = listOf(
     TutorialStep.PlayStep(
         card = Rank.JACK of Suit.DIAMONDS,
         advice = "You must follow suit when you can: Olive led diamonds and the J♦ is your only " +
-            "one. Here it's just an ordinary Jack — only the same-colour J♣ becomes a trump.",
+            "one. Here it's just an ordinary Jack; only the same-colour J♣ becomes a trump.",
     ),
     TutorialStep.PlayStep(
         card = Rank.QUEEN of Suit.CLUBS,
-        advice = "Forced again — the Q♣ is your only club. Your partner Mabel's K♣ is winning " +
+        advice = "Forced again: the Q♣ is your only club. Your partner Mabel's K♣ is winning " +
             "the trick, and her tricks count towards your contract too.",
     ),
     TutorialStep.PlayStep(
         card = Rank.QUEEN of Suit.HEARTS,
-        advice = "You're out of clubs, so you could trump — but Mabel's A♣ already has the trick " +
+        advice = "You're out of clubs, so you could trump, but Mabel's A♣ already has the trick " +
             "and she's your partner. Never trump your partner's winner: throw your lowest card, " +
             "the Q♥.",
     ),
     TutorialStep.PlayStep(
         card = Rank.KING of Suit.HEARTS,
         advice = "Mabel's J♥ is heading for the trick, so play your cheaper heart, the K♥. " +
-            "Either way this trick stays on your side — and the A♥ is saved as a certain " +
+            "Either way this trick stays on your side, and the A♥ is saved as a certain " +
             "winner for later.",
     ),
     TutorialStep.PlayStep(
         card = Rank.TEN of Suit.SPADES,
         advice = "Count the trumps: every one outside your hand has now been played. Your 10♠ " +
-            "and 9♠ are unbeatable — lead the 10♠.",
+            "and 9♠ are unbeatable, so lead the 10♠.",
     ),
     TutorialStep.PlayStep(
         card = Rank.NINE of Suit.SPADES,
-        advice = "Cash the 9♠ too. That's the seventh trick for your side — your 7♠ contract " +
+        advice = "Cash the 9♠ too. That's the seventh trick for your side: your 7♠ contract " +
             "is home.",
     ),
     TutorialStep.PlayStep(
         card = Rank.ACE of Suit.HEARTS,
-        advice = "Finish with the A♥ — the highest heart left. Eight tricks in all: contract " +
+        advice = "Finish with the A♥, the highest heart left. Eight tricks in all: contract " +
             "made with one to spare.",
     ),
 )
@@ -222,21 +222,21 @@ val tutorialSteps: List<TutorialStep> = listOf(
  * wins a trick it is immediately the human's lead, so no hold applies — the rest are safety notes.
  */
 val tutorialTrickNotes: Map<Int, String> = mapOf(
-    1 to "Your Joker couldn't lose — and it pulled a trump out of every other hand.",
+    1 to "Your Joker couldn't lose, and it pulled a trump out of every other hand.",
     2 to "The right bower wins: even Olive's A♠ fell to your J♠.",
-    3 to "There it is — Olive's J♣ is the LEFT BOWER, a spade in disguise, and it beat your K♠. " +
+    3 to "There it is: Olive's J♣ is the LEFT BOWER, a spade in disguise, and it beat your K♠. " +
         "That was the last trump out against you. Tap the trick to continue.",
-    4 to "Olive led the Q♦ and it held — everyone had to follow suit, and your forced J♦ ranks " +
+    4 to "Olive led the Q♦ and it held: everyone had to follow suit, and your forced J♦ ranks " +
         "below her Queen. In diamonds a Jack is just a Jack: only the black ones are bowers " +
         "this hand. Tap the trick to continue.",
-    5 to "Your partner Mabel's K♣ took the trick — and a partner's tricks count towards your " +
+    5 to "Your partner Mabel's K♣ took the trick, and a partner's tricks count towards your " +
         "contract too, so nothing is lost. Tap the trick to continue.",
     6 to "Mabel's A♣ won the trick. You had no clubs, but you threw the Q♥ rather than waste a " +
         "trump on your partner's certain winner. Tap the trick to continue.",
-    7 to "Your K♥ topped Mabel's J♥ — the trick stayed on your side either way.",
+    7 to "Your K♥ topped Mabel's J♥, though the trick was staying on your side either way.",
     8 to "No trumps are left outside your hand, so the 10♠ walked it.",
-    9 to "The 9♠ was just as unbeatable — that's the seventh trick: contract secured.",
-    10 to "The A♥ took the last trick — eight in all, 7♠ made with a trick to spare.",
+    9 to "The 9♠ was just as unbeatable, and that's the seventh trick: contract secured.",
+    10 to "The A♥ took the last trick: eight in all, 7♠ made with a trick to spare.",
 )
 
 /**
