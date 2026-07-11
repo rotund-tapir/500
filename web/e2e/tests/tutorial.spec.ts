@@ -14,10 +14,15 @@ test('starting the tutorial boots the game screen on wasm without errors', async
   await awaitAppBoot(page);
 
   await clickByRole(page, 'button', 'How to play');
-  // Page through the rules primer to the final page, whose Start button deals the hand.
+  // Page through the rules primer to the final page, whose Start button deals the hand. The
+  // dialog's geometry is fixed across pages, but the semantics mirror refreshes asynchronously
+  // after each click — so re-query every iteration, tolerate a mid-refresh null box, and give the
+  // mirror a beat to settle rather than failing the run on a transient detach.
   await expect(page.getByRole('button', { name: 'Next' })).toBeVisible({ timeout: 15_000 });
-  while (await page.getByRole('button', { name: 'Start' }).count() === 0) {
-    await clickByRole(page, 'button', 'Next');
+  for (let i = 0; i < 15 && (await page.getByRole('button', { name: 'Start' }).count()) === 0; i++) {
+    const box = await page.getByRole('button', { name: 'Next' }).first().boundingBox().catch(() => null);
+    if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(350);
   }
   await clickByRole(page, 'button', 'Start');
 

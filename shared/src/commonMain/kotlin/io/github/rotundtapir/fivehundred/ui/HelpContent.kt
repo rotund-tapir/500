@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -141,6 +143,7 @@ internal fun TutorialPagesDialog(
     onFinish: () -> Unit,
     onDismiss: (() -> Unit)? = null,
     lastPageTag: String? = null,
+    bodyHeight: Dp? = null,
 ) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     val onLastPage = page == pages.lastIndex
@@ -149,8 +152,16 @@ internal fun TutorialPagesDialog(
         testTag = lastPageTag?.takeIf { onLastPage },
     ) {
         Column(Modifier.padding(horizontal = 24.dp).padding(top = 22.dp, bottom = 8.dp)) {
-            // A minimum height keeps the dots and buttons from jumping as page lengths vary.
-            Column(Modifier.heightIn(min = 180.dp)) {
+            // Stable geometry across pages so Next/Back never move under a reader's thumb: a fixed
+            // body viewport (scrolling any overflow) when bodyHeight is set, else a minimum height.
+            val scroll = if (bodyHeight != null) rememberScrollState(0) else null
+            if (scroll != null) LaunchedEffect(page) { scroll.scrollTo(0) }
+            val bodyModifier = if (bodyHeight != null) {
+                Modifier.height(bodyHeight).verticalScroll(scroll!!)
+            } else {
+                Modifier.heightIn(min = 180.dp)
+            }
+            Column(bodyModifier) {
                 ReaderTitle(pages[page].title)
                 Spacer(Modifier.height(10.dp))
                 SuitText(pages[page].body, fontSize = 16.sp, lineHeight = 24.sp)
@@ -201,6 +212,7 @@ fun TutorialIntroDialog(onStart: () -> Unit, onDismiss: () -> Unit) {
         finishTag = "tutorialStart",
         onFinish = onStart,
         onDismiss = onDismiss,
+        bodyHeight = 300.dp,
     )
 }
 
