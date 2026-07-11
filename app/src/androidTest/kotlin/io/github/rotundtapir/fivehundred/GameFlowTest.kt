@@ -122,10 +122,15 @@ class GameFlowTest {
     // recommended action is enabled at each step. See ui/Tutorial.kt for the script.
     // ---------------------------------------------------------------------------------------------
 
-    /** Taps "How to play" and confirms the intro, landing in the scripted tutorial hand. */
+    /** Taps "How to play", pages through the primer, and lands in the scripted tutorial hand. */
     private fun startTutorial() {
         rule.onNodeWithTag("walkthroughButton").performClick()
-        waitForText("Start")
+        // Page through the rules primer; the final page's Start button deals the hand.
+        rule.waitUntil(STEP_TIMEOUT_MS) { nodesWithTag("tutorialIntroNext").isNotEmpty() }
+        while (nodesWithTag("tutorialStart").isEmpty()) {
+            rule.onNodeWithTag("tutorialIntroNext").performClick()
+            rule.waitForIdle()
+        }
         rule.onNodeWithTag("tutorialStart").performClick()
     }
 

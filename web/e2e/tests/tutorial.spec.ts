@@ -14,7 +14,11 @@ test('starting the tutorial boots the game screen on wasm without errors', async
   await awaitAppBoot(page);
 
   await clickByRole(page, 'button', 'How to play');
-  await expect(page.getByRole('button', { name: 'Start' })).toBeVisible({ timeout: 15_000 });
+  // Page through the rules primer to the final page, whose Start button deals the hand.
+  await expect(page.getByRole('button', { name: 'Next' })).toBeVisible({ timeout: 15_000 });
+  while (await page.getByRole('button', { name: 'Start' }).count() === 0) {
+    await clickByRole(page, 'button', 'Next');
+  }
   await clickByRole(page, 'button', 'Start');
 
   // We left the home screen for the tutorial hand: its "Play with bots" button is gone, the canvas is

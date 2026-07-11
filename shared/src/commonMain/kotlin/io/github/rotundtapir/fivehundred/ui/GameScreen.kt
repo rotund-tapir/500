@@ -278,34 +278,15 @@ fun GameScreen(
     )
 
     if (tutorial != null && tutorialComplete) {
-        // A short epilogue (misère, no-trumps) pages before the completion dialog.
-        var epiloguePage by rememberSaveable { mutableIntStateOf(0) }
-        if (epiloguePage < tutorialEpilogue.size) {
-            val page = tutorialEpilogue[epiloguePage]
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(page.title) },
-                text = { Text(page.body, fontSize = 17.sp, lineHeight = 23.sp) },
-                confirmButton = {
-                    TextButton(
-                        onClick = { epiloguePage++ },
-                        modifier = Modifier.testTag("tutorialEpilogueNext"),
-                    ) { Text("Next") }
-                },
-            )
-        } else {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text("Tutorial complete") },
-                text = { Text(TUTORIAL_COMPLETION, fontSize = 17.sp, lineHeight = 23.sp) },
-                confirmButton = {
-                    TextButton(onClick = onExit, modifier = Modifier.testTag("tutorialCompleteContinue")) {
-                        Text("Continue")
-                    }
-                },
-                modifier = Modifier.testTag("tutorialComplete"),
-            )
-        }
+        // The epilogue (misère, no-trumps) and completion pages, on the shared card-face pager.
+        TutorialPagesDialog(
+            pages = tutorialEpilogue + TutorialPage("Tutorial complete", TUTORIAL_COMPLETION),
+            nextTag = "tutorialEpilogueNext",
+            finishLabel = "Continue",
+            finishTag = "tutorialCompleteContinue",
+            onFinish = onExit,
+            lastPageTag = "tutorialComplete",
+        )
     }
 }
 

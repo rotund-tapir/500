@@ -50,25 +50,72 @@ sealed interface TutorialStep {
     ) : TutorialStep
 }
 
-/** Shown in the confirmation dialog before the tutorial hand is dealt. */
+/** A titled page of tutorial prose, shown in the paged card dialogs before and after the hand. */
+data class TutorialPage(val title: String, val body: String)
+
+/** The primer's hand-over page: what the scripted tutorial hand is about to do. */
 const val TUTORIAL_INTRO =
-    "The tutorial deals a practice hand against three bots and guides every decision — " +
-        "what to bid, what to discard, and which card to play, with the reason why. " +
+    "Now see it in play. You'll play one practice hand against three bots, guided at every " +
+        "decision — what to bid, what to discard, and which card to play, with the reason why. " +
         "Only the recommended move is enabled at each step, so you can't go wrong."
 
-/** A short epilogue page shown after the scripted hand, before the completion dialog. */
-data class TutorialEpiloguePage(val title: String, val body: String)
+/**
+ * The primer paged through before the practice hand deals: what the game is, what a trick is, why
+ * you bid and what the kitty is, and how to size up a hand — the concepts the scripted advice then
+ * applies. New-player feedback drove this: the hand's advice alone assumed all of it as known.
+ */
+val tutorialPrologue: List<TutorialPage> = listOf(
+    TutorialPage(
+        title = "Welcome to 500",
+        body = "500 is a trick-taking card game: four players in two teams, and your partner " +
+            "sits across the table. Each hand, every player is dealt 10 cards, and the two " +
+            "teams compete to win tricks with them. The first team to reach 500 points wins " +
+            "the game.",
+    ),
+    TutorialPage(
+        title = "What's a trick?",
+        body = "One card from each player, played in turn around the table — that's a trick, " +
+            "and the best card takes all four. You must play a card of the suit that was led " +
+            "whenever you have one. The highest card of that suit wins the trick — unless a " +
+            "player with none of the suit plays a trump, which beats everything. Whoever wins " +
+            "a trick leads the next. Ten cards each means every hand is a fight over exactly " +
+            "10 tricks.",
+    ),
+    TutorialPage(
+        title = "Bidding and the kitty",
+        body = "Each hand opens with an auction. A bid like 7♠ is a promise: \"my team will " +
+            "win at least 7 of the 10 tricks, with spades as trumps.\" The highest bid becomes " +
+            "the contract, and the winning bidder gets a reward: the kitty, the 3 cards left " +
+            "over from the deal, picked up into hand with any 3 cards discarded in return. " +
+            "Make the contract and your team scores its value; fall short and you lose that " +
+            "much instead — while the defending team scores 10 points for every trick it takes.",
+    ),
+    TutorialPage(
+        title = "Sizing up a hand",
+        body = "Bid only what your cards can back up. Count your likely winners: the Joker " +
+            "(the highest trump in the game), high trumps, aces, and the extra tricks a long " +
+            "trump suit brings once everyone else runs out. Then allow roughly one more for " +
+            "help you can't see yet — the kitty will improve your hand, and your partner's " +
+            "cards usually chip in. Six winners in hand is a sound bid of 7. Nothing high and " +
+            "no long suit? Pass, and score 10 a trick defending while the other side " +
+            "overreaches.",
+    ),
+    TutorialPage(
+        title = "A practice hand",
+        body = TUTORIAL_INTRO,
+    ),
+)
 
 /** Two bids the scripted hand never used, touched on before the tutorial closes. */
-val tutorialEpilogue: List<TutorialEpiloguePage> = listOf(
-    TutorialEpiloguePage(
+val tutorialEpilogue: List<TutorialPage> = listOf(
+    TutorialPage(
         title = "One more bid: Misère",
         body = "Misère is a contract to win NO tricks at all — worth 250 points if you manage " +
             "it. It's played with no trumps, your partner sits the hand out, and it can only " +
             "be bid once the auction has reached seven (7♠ or higher). Tempting when your hand " +
             "is nothing but low cards.",
     ),
-    TutorialEpiloguePage(
+    TutorialPage(
         title = "And no-trumps",
         body = "You can also bid with no trump suit at all (6NT up to 10NT — the top of each " +
             "level). With no trumps there are no bowers: the highest card of the led suit wins " +
@@ -91,9 +138,11 @@ const val TUTORIAL_COMPLETION =
 val tutorialSteps: List<TutorialStep> = listOf(
     TutorialStep.BidStep(
         bid = Bid.Named(7, Trump.SPADES),
-        advice = "Look at your spades: the Joker, the J♠ (the \"right bower\"), K♠, 10♠ and 9♠ — " +
-            "five top trumps, plus the A♥ on the side. That's worth about seven tricks, and the " +
-            "others have all passed, so open the bidding with 7♠.",
+        advice = "Time to bid — count your likely winners. The Joker, the J♠ (the \"right " +
+            "bower\" — more on that soon), K♠, 10♠ and 9♠ are five strong spades; the A♥ " +
+            "makes six. The seventh? Winning the auction gets you the kitty's three cards to " +
+            "improve your hand, and your partner's cards usually chip in a trick or so. " +
+            "Everyone else has passed — bid 7♠.",
     ),
     TutorialStep.DiscardStep(
         cards = listOf(
