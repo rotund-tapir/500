@@ -56,6 +56,7 @@ internal fun TutorialBubble(
     botNames: Map<Seat, String>,
     anchors: TutorialAnchors,
     overlayOrigin: Offset,
+    narration: NarrationState? = null,
 ) {
     val step = tutorial.step
     val isHumanDecision = when (step) {
@@ -71,11 +72,11 @@ internal fun TutorialBubble(
     val trickHeld = view.phase == Phase.PLAY && view.currentTrick.isEmpty() &&
         lastTrick != null && !view.isMyTurn
     val text = when {
-        step == null -> "That's the whole hand. See how it scored."
+        step == null -> TUTORIAL_HAND_DONE
         isHumanDecision -> step.advice
         trickHeld -> tutorialTrickNotes[view.trickNumber]
             ?: "${seatLabel(view, botNames, lastTrick.winner)} won the trick; tap it to continue."
-        else -> "Watch the table while the other players act…"
+        else -> TUTORIAL_WATCH
     }
     val targetKey = when {
         !isHumanDecision -> "trick"
@@ -86,6 +87,7 @@ internal fun TutorialBubble(
     val tailDown = targetKey != "trick"
     val target = anchors[targetKey] ?: anchors["hand"] ?: anchors["trick"] ?: return
     val showTrumpOrder = isHumanDecision && step?.showTrumpOrder == true
+    NarrateEffect(narration, text)
 
     BubbleLayout(
         target = target,

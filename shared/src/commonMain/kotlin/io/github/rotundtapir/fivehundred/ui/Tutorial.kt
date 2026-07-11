@@ -239,6 +239,66 @@ val tutorialTrickNotes: Map<Int, String> = mapOf(
     10 to "The A♥ took the last trick: eight in all, 7♠ made with a trick to spare.",
 )
 
+/** Bubble text while the bots act; also narrated. */
+const val TUTORIAL_WATCH = "Watch the table while the other players act…"
+
+/** Bubble text once the scripted hand is over, behind the hand-result dialog; also narrated. */
+const val TUTORIAL_HAND_DONE = "That's the whole hand. See how it scored."
+
+/** One narrated tutorial line: [id] is the stable stem of its audio asset (files/narration/<id>.mp3). */
+data class NarrationLine(val id: String, val text: String)
+
+// Declared before tutorialNarration below: top-level initializers run in file order, and
+// speechText needs these at class-init time.
+private val CARD_NOTATION = Regex("(10|[2-9AKQJ])([♠♥♦♣])")
+private val NO_TRUMP_BID = Regex("\\b(10|[6-9])NT\\b")
+private val PLUS_POINTS = Regex("\\+(\\d+)")
+
+// Every display text the tutorial shows, with the stable id of its narration clip. The clip audio
+// is pre-generated from these by scripts/generate-narration.sh (Piper TTS); NarrationManifestTest
+// fails the build if a text changes without regenerating, so the voice can never drift from the
+// words on screen.
+private val narrationSources: List<Pair<String, String>> = buildList {
+    tutorialPrologue.forEachIndexed { i, page -> add("primer-${i + 1}" to page.body) }
+    tutorialSteps.forEachIndexed { i, step -> add("step-${i + 1}" to step.advice) }
+    tutorialTrickNotes.entries.sortedBy { it.key }.forEach { (n, note) -> add("trick-$n" to note) }
+    tutorialEpilogue.forEachIndexed { i, page -> add("epilogue-${i + 1}" to page.body) }
+    add("completion" to TUTORIAL_COMPLETION)
+    add("watch" to TUTORIAL_WATCH)
+    add("hand-done" to TUTORIAL_HAND_DONE)
+}
+
+/** Every narration line as the synthesizer should speak it. Consumed by the generator and gate. */
+val tutorialNarration: List<NarrationLine> =
+    narrationSources.map { (id, display) -> NarrationLine(id, speechText(display)) }
+
+private val narrationIdByDisplay: Map<String, String> =
+    narrationSources.associate { (id, display) -> display to id }
+
+/**
+ * The narration clip for a display text the tutorial UI is showing, or null for dynamic texts
+ * (e.g. the bubble's interpolated fallback) that have no pre-generated clip.
+ */
+fun narrationIdFor(displayText: String): String? = narrationIdByDisplay[displayText]
+
+/**
+ * Expands card-table notation for the synthesizer: "J♠" → "jack of spades", "10NT" →
+ * "10 no trumps", "+140" → "plus 140". Everything else is spoken as written.
+ */
+fun speechText(display: String): String = display
+    .replace(CARD_NOTATION) { m ->
+        val rank = when (val r = m.groupValues[1]) {
+            "A" -> "ace"; "K" -> "king"; "Q" -> "queen"; "J" -> "jack"
+            else -> r
+        }
+        val suit = when (m.groupValues[2]) {
+            "♠" -> "spades"; "♥" -> "hearts"; "♦" -> "diamonds"; else -> "clubs"
+        }
+        "$rank of $suit"
+    }
+    .replace(NO_TRUMP_BID) { m -> "${m.groupValues[1]} no trumps" }
+    .replace(PLUS_POINTS) { m -> "plus ${m.groupValues[1]}" }
+
 /**
  * The live tutorial state handed to [GameScreen]: the index of the next human decision in
  * [tutorialSteps], and how to advance it once that decision is taken.

@@ -60,6 +60,8 @@ fun GameScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
     tutorial: TutorialScriptState? = null,
+    // Non-null while the tutorial narrates: drives the top-bar mute toggle and the spoken bubble.
+    narration: NarrationState? = null,
     onResultDismiss: (Int) -> Unit = {},
     onDealAnimationFinish: (Int) -> Unit = {},
     onTrickAcknowledge: (Int, Int) -> Unit = { _, _ -> },
@@ -163,7 +165,11 @@ fun GameScreen(
                     botNames = botNames,
                     onOpenSettings = { showSettings = true },
                     onMenu = { showLeaveConfirm = true },
-                    trailing = online?.let { { OnlineEmoteButton(it) } },
+                    trailing = when {
+                        online != null -> ({ OnlineEmoteButton(online) })
+                        narration != null -> ({ NarrationToggle(narration, compact = true) })
+                        else -> null
+                    },
                 )
                 ContractLine(view, botNames)
                 Spacer(Modifier.height(12.dp))
@@ -230,7 +236,7 @@ fun GameScreen(
             // The one card back currently in flight from the deck to a pile, drawn above everything.
             FlyingDealCard(dealState)
             if (tutorial != null && tutorialAnchors != null && !dealState.dealing) {
-                TutorialBubble(tutorial, view, botNames, tutorialAnchors, dealState.overlayOrigin)
+                TutorialBubble(tutorial, view, botNames, tutorialAnchors, dealState.overlayOrigin, narration)
             }
         }
     }
@@ -301,6 +307,7 @@ fun GameScreen(
             finishTag = "tutorialCompleteContinue",
             onFinish = onExit,
             lastPageTag = "tutorialComplete",
+            narration = narration,
         )
     }
 }

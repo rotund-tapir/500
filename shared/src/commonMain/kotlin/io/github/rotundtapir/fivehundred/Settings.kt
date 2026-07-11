@@ -33,6 +33,7 @@ object SettingsKeys {
     const val NO_TRUMPS_ENABLED = "no_trumps_enabled"
     const val HOLD_TRICKS = "hold_tricks"
     const val SOUND_VOLUME = "sound_volume"
+    const val NARRATION_ENABLED = "narration_enabled"
     const val SERVER_URL = "server_url"
     const val PLAYER_NAME = "player_name"
 }
@@ -48,6 +49,9 @@ object SettingsDefaults {
     const val NO_TRUMPS_ENABLED = true
     const val HOLD_TRICKS = false
     const val SOUND_VOLUME = 0.7f
+
+    /** Tutorial voice narration — on by default; the home screen advertises it and offers the mute. */
+    const val NARRATION_ENABLED = true
 
     /** The official game server. Self-hosters / local testing point this elsewhere. */
     const val SERVER_URL = "wss://500.29022617.xyz"
@@ -91,6 +95,11 @@ interface SettingsRepository {
     val soundVolume: Flow<Float>
 
     suspend fun setSoundVolume(value: Float)
+
+    /** Whether the tutorial speaks its guidance aloud; [SettingsDefaults.NARRATION_ENABLED] when unset. */
+    val narrationEnabled: Flow<Boolean>
+
+    suspend fun setNarrationEnabled(value: Boolean)
 
     /** The online game server URL (`wss://…`); [SettingsDefaults.SERVER_URL] when unset. */
     val serverUrl: Flow<String>

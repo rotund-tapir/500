@@ -60,6 +60,7 @@ fun HomeScreen(
     onPlayWithFriends: () -> Unit,
     onStartTutorial: () -> Unit,
     settings: SettingsControls,
+    narration: NarrationState,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -123,7 +124,10 @@ fun HomeScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
                     modifier = Modifier.testTag("walkthroughButton"),
-                ) { Text("How to play") }
+                    // The ♪ warns that the tutorial speaks aloud — no surprise audio. It drops
+                    // when narration is muted, and the toggle below flips it back any time.
+                ) { Text(if (narration.enabled) "How to play ♪" else "How to play") }
+                NarrationToggle(narration)
             }
         }
     }
@@ -135,6 +139,7 @@ fun HomeScreen(
                 onStartTutorial()
             },
             onDismiss = { showTutorialIntro = false },
+            narration = narration,
         )
     }
     if (showSettings) {

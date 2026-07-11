@@ -34,6 +34,8 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // Tutorial narration clips (composeResources/files/narration) reach both targets.
+            implementation(compose.components.resources)
             // JetBrains' multiplatform androidx.lifecycle: ViewModel/viewModelScope/viewModel()
             // under the same package names as on Android.
             api(libs.jetbrains.lifecycle.viewmodel.compose)
@@ -48,6 +50,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "io.github.rotundtapir.fivehundred.generated.resources"
 }
 
 android {

@@ -75,6 +75,15 @@ class LocalStorageSettingsRepository : SettingsRepository {
         soundVolumeFlow.value = coerced
     }
 
+    private val narrationEnabledFlow =
+        MutableStateFlow(stored(SettingsKeys.NARRATION_ENABLED)?.toBoolean() ?: SettingsDefaults.NARRATION_ENABLED)
+    override val narrationEnabled: Flow<Boolean> = narrationEnabledFlow
+
+    override suspend fun setNarrationEnabled(value: Boolean) {
+        store(SettingsKeys.NARRATION_ENABLED, value.toString())
+        narrationEnabledFlow.value = value
+    }
+
     private val serverUrlFlow = MutableStateFlow(
         stored(SettingsKeys.SERVER_URL)?.takeIf { it.isNotBlank() } ?: SettingsDefaults.SERVER_URL,
     )

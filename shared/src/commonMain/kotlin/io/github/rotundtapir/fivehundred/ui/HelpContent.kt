@@ -144,9 +144,11 @@ internal fun TutorialPagesDialog(
     onDismiss: (() -> Unit)? = null,
     lastPageTag: String? = null,
     bodyHeight: Dp? = null,
+    narration: NarrationState? = null,
 ) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     val onLastPage = page == pages.lastIndex
+    NarrateEffect(narration, pages[page].body)
     CardFaceDialog(
         onDismissRequest = { onDismiss?.invoke() },
         testTag = lastPageTag?.takeIf { onLastPage },
@@ -169,6 +171,9 @@ internal fun TutorialPagesDialog(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 PageDots(pages.size, page)
+                if (narration != null) {
+                    NarrationToggle(narration, compact = true, tint = InkOnCardSurface)
+                }
                 Spacer(Modifier.weight(1f))
                 when {
                     page > 0 -> ReaderTextButton("Back", onClick = { page-- })
@@ -204,7 +209,11 @@ internal fun TutorialPagesDialog(
  * whose Start button deals.
  */
 @Composable
-fun TutorialIntroDialog(onStart: () -> Unit, onDismiss: () -> Unit) {
+fun TutorialIntroDialog(
+    onStart: () -> Unit,
+    onDismiss: () -> Unit,
+    narration: NarrationState? = null,
+) {
     TutorialPagesDialog(
         pages = tutorialPrologue,
         nextTag = "tutorialIntroNext",
@@ -213,6 +222,7 @@ fun TutorialIntroDialog(onStart: () -> Unit, onDismiss: () -> Unit) {
         onFinish = onStart,
         onDismiss = onDismiss,
         bodyHeight = 300.dp,
+        narration = narration,
     )
 }
 

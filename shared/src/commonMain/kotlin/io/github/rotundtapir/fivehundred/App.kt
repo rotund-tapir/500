@@ -20,10 +20,12 @@ import io.github.rotundtapir.fivehundred.ui.BotSetupScreen
 import io.github.rotundtapir.fivehundred.ui.GameMode
 import io.github.rotundtapir.fivehundred.ui.GameScreen
 import io.github.rotundtapir.fivehundred.ui.HomeScreen
+import io.github.rotundtapir.fivehundred.ui.NarrationState
 import io.github.rotundtapir.fivehundred.ui.SettingsControls
 import io.github.rotundtapir.fivehundred.ui.TUTORIAL_SEED
 import io.github.rotundtapir.fivehundred.ui.TutorialScriptState
 import io.github.rotundtapir.fivehundred.ui.online.OnlineFlow
+import io.github.rotundtapir.fivehundred.ui.rememberNarrationPlayer
 import kotlinx.coroutines.launch
 
 /**
@@ -81,6 +83,16 @@ fun FiveHundredApp(
     // function that the dealing animation's sound hook uses for shuffle/deal effects.
     val playSound = rememberGameSoundEffects(view = view, volume = soundVolume)
     val holdTricks by settings.holdTricks.collectAsState(initial = SettingsDefaults.HOLD_TRICKS)
+    // Tutorial voice narration: the toggle is persisted; playback additionally requires a nonzero
+    // master volume (at 0 no audio object is ever created — the -no-audio emulator rule).
+    val narrationEnabled by settings.narrationEnabled.collectAsState(initial = SettingsDefaults.NARRATION_ENABLED)
+    val narrationPlayer = rememberNarrationPlayer()
+    val narration = NarrationState(
+        enabled = narrationEnabled,
+        audible = narrationEnabled && soundVolume > 0f,
+        onToggle = { scope.launch { settings.setNarrationEnabled(!narrationEnabled) } },
+        player = narrationPlayer,
+    )
     val persistedServerUrl by settings.serverUrl.collectAsState(initial = SettingsDefaults.SERVER_URL)
     // A ?serverUrl= override wins for this session only and is NEVER persisted: otherwise a shared
     // link like ?serverUrl=wss://evil could permanently repoint a victim's online play (and control
@@ -175,6 +187,7 @@ fun FiveHundredApp(
                 tutorial = if (tutorialActive) {
                     TutorialScriptState(tutorialStepIndex) { tutorialStepIndex++ }
                 } else null,
+                narration = if (tutorialActive) narration else null,
                 onResultDismiss = vm::acknowledgeHandResult,
                 onDealAnimationFinish = vm::dealAnimationFinished,
                 onTrickAcknowledge = vm::acknowledgeTrick,
@@ -194,6 +207,7 @@ fun FiveHundredApp(
                 monetization = monetization,
                 onPlayWithBots = { appScreen = AppScreen.BOT_SETUP.name },
                 onStartTutorial = startTutorial,
+                narration = narration,
                 onPlayWithFriends = {
                     onlineVm.enter(serverUrl, appConfig.version, appConfig.platform)
                     appScreen = AppScreen.ONLINE.name
