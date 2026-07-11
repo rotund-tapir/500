@@ -59,7 +59,7 @@ certificate rate limit; comment it out and `docker compose restart caddy` once i
 | `MSG_RATE_PER_SEC` / `MSG_BURST` | `10` / `20` | Per-socket message rate limit. |
 | `LOBBIES_PER_IP_PER_10MIN` | `5` | Lobby-creation throttle. |
 | `MAX_ROOMS` | `500` | Server-wide room cap. |
-| `LOBBY_GRACE_MILLIS` | `30000` | How long a lobby/post-game seat is held for its owner after a bare socket drop (a page reload, a network blip) before the room is disbanded (creator) or the seat freed (guest). |
+| `LOBBY_GRACE_MILLIS` | `900000` (15 min) | How long a lobby/post-game seat is held for its owner after a bare socket drop (a page reload, a network blip) before the room is disbanded (creator) or the seat freed (guest). |
 | `DEV_MODE` | `false` | Relaxes IP/rate limits and honours a client-supplied game seed. **Local testing only.** |
 
 ## Resource needs

@@ -25,10 +25,12 @@ data class ServerConfig(
     val sessionTtlMillis: Long = 60 * 60_000L,
     /**
      * How long a lobby/post-game seat is held for its owner after a bare socket drop, so a page
-     * reload or transient network blip can reconnect and reclaim it — instead of the room being
-     * disbanded (creator) or the seat freed (guest) the instant the old socket closes.
+     * reload, a transient network blip, or an app switch (a host sharing the invite code via
+     * another app can be away for minutes) can reconnect and reclaim it — instead of the room
+     * being disbanded (creator) or the seat freed (guest) the instant the old socket closes.
+     * The lobby idle-disband remains the backstop for genuinely abandoned rooms.
      */
-    val lobbyDisconnectGraceMillis: Long = 30_000L,
+    val lobbyDisconnectGraceMillis: Long = 15 * 60_000L,
     /** Relaxes IP caps and honours a client-supplied game seed. For local dev / e2e only. */
     val devMode: Boolean = false,
     /** Test hook: force the per-turn timeout to this many ms, ignoring the lobby's seconds setting. */
@@ -65,7 +67,7 @@ data class ServerConfig(
                 maxRooms = int("MAX_ROOMS", 500),
                 maxFrameBytes = long("MAX_FRAME_BYTES", 16 * 1024),
                 sessionTtlMillis = long("SESSION_TTL_MILLIS", 60 * 60_000L),
-                lobbyDisconnectGraceMillis = long("LOBBY_GRACE_MILLIS", 30_000L),
+                lobbyDisconnectGraceMillis = long("LOBBY_GRACE_MILLIS", 15 * 60_000L),
                 devMode = bool("DEV_MODE", false),
             )
         }
