@@ -23,8 +23,8 @@ The two are the `play` and `foss` build flavors. The F-Droid build excludes the
 
 - **Web**: play instantly at <https://rotundtapir.github.io/500/> — no install.
 - **GitHub**: signed ad-free APKs are attached to
-  [releases](https://github.com/rotundtapir/500/releases) (sideload; updates keep
-  the same signature).
+  [releases](https://github.com/rotundtapir/500/releases) (install directly;
+  updates keep the same signature).
 - **Google Play**: internal testing (ad-supported flavor).
 - **F-Droid**: submission planned.
 
@@ -43,7 +43,6 @@ cd 500
 ```
 
 Requires **JDK 21** and, for the app modules, the **Android SDK** (`compileSdk 36`).
-See [`CLAUDE.md`](CLAUDE.md) for the full command list and the toolchain gotchas.
 
 ## Project layout
 

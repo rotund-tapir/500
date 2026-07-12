@@ -34,7 +34,7 @@ file authorising this app. It is **already hosted** at
 <https://rotundtapir.github.io/.well-known/assetlinks.json> (served by the `rotundtapir.github.io`
 user-site repo — the app's Pages site lives under `/500/`, so the domain root is a separate repo).
 It authorises `io.github.rotundtapir.fivehundred` for three signing certs, so every channel opens
-links: **Play App Signing**, the **FOSS release** key (sideloaded GitHub-release APKs), and the
+links: **Play App Signing**, the **FOSS release** key (directly-installed GitHub-release APKs), and the
 **debug** key (local dev builds).
 
 Maintenance — update `.well-known/assetlinks.json` in that repo if a signing key changes:
