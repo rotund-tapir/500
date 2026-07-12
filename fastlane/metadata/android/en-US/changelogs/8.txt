@@ -1,0 +1,1 @@
+The tutorial now speaks: every page and piece of advice is narrated aloud, with a clear ♪ indicator before any audio plays and easy mute toggles on the home screen and in the tutorial. Cards on the table are bigger, sized to your screen. Online, the next hand no longer peeks out from behind the hand-result screen.
