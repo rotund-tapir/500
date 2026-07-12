@@ -68,9 +68,9 @@ val tutorialPrologue: List<TutorialPage> = listOf(
     TutorialPage(
         title = "Welcome to 500",
         body = "500 is a trick-taking card game: four players in two teams, and your partner " +
-            "sits across the table. Each hand, every player is dealt 10 cards, and the two " +
-            "teams compete to win tricks with them. The first team to reach 500 points wins " +
-            "the game.",
+            "sits across the table from you. Each hand, every player is dealt 10 cards, and " +
+            "the two teams compete to win tricks with them. The first team to reach 500 " +
+            "points wins the game.",
     ),
     TutorialPage(
         title = "What's a trick?",
@@ -93,12 +93,12 @@ val tutorialPrologue: List<TutorialPage> = listOf(
     TutorialPage(
         title = "Sizing up a hand",
         body = "Bid only what your cards can back up. Count your likely winners: the Joker " +
-            "(the highest trump in the game), high trumps, aces, and the extra tricks a long " +
-            "trump suit brings once everyone else runs out. Then allow roughly one more for " +
-            "help you can't see yet: the kitty will improve your hand, and your partner's " +
-            "cards usually chip in. Six winners in hand is a sound bid of 7. Nothing high and " +
-            "no long suit? Pass, and score 10 a trick defending while the other side " +
-            "overreaches.",
+            "(the highest trump in the game), high trumps, and aces. Holding lots of trumps " +
+            "is worth extra: once the other players' trumps run out, even your small ones " +
+            "win tricks. Then allow roughly one more for help you can't see yet: the kitty " +
+            "will improve your hand, and your partner's cards usually chip in. Six winners " +
+            "in hand is a sound bid of 7. Nothing high and no long suit? Pass, and score " +
+            "10 a trick defending while the other side overreaches.",
     ),
     TutorialPage(
         title = "A practice hand",
@@ -239,9 +239,6 @@ val tutorialTrickNotes: Map<Int, String> = mapOf(
     10 to "The A♥ took the last trick: eight in all, 7♠ made with a trick to spare.",
 )
 
-/** Bubble text while the bots act; also narrated. */
-const val TUTORIAL_WATCH = "Watch the table while the other players act…"
-
 /** Bubble text once the scripted hand is over, behind the hand-result dialog; also narrated. */
 const val TUTORIAL_HAND_DONE = "That's the whole hand. See how it scored."
 
@@ -254,6 +251,21 @@ private val CARD_NOTATION = Regex("(10|[2-9AKQJ])([♠♥♦♣])")
 private val NO_TRUMP_BID = Regex("\\b(10|[6-9])NT\\b")
 private val PLUS_POINTS = Regex("\\+(\\d+)")
 
+/** Phrase-level speech substitutions where synthesizers stumble on the written form. */
+private val SPEECH_SUBSTITUTIONS = listOf(
+    // A bare "10" in this idiom draws an awkward pause; the word flows.
+    "score 10 a trick" to "score ten a trick",
+    // Reading the parenthetical verbatim repeats the word: "seven, seven of spades or higher".
+    "seven (7♠ or higher)" to "7♠ or higher",
+)
+
+/**
+ * An all-caps EMPHASIS word ("JACKS OUTRANK THE ACE", "BLACK"). Synthesizers read these as
+ * acronyms or letter-spell them ("B-lack"); spoken text folds them to lowercase. Runs after the
+ * notation rules, so "NT" is already "no trumps" by then.
+ */
+private val SHOUTED_WORD = Regex("\\b[A-Z]{2,}\\b")
+
 // Every display text the tutorial shows, with the stable id of its narration clip. The clip audio
 // is pre-generated from these by scripts/generate-narration.sh (Piper TTS); NarrationManifestTest
 // fails the build if a text changes without regenerating, so the voice can never drift from the
@@ -264,7 +276,6 @@ private val narrationSources: List<Pair<String, String>> = buildList {
     tutorialTrickNotes.entries.sortedBy { it.key }.forEach { (n, note) -> add("trick-$n" to note) }
     tutorialEpilogue.forEachIndexed { i, page -> add("epilogue-${i + 1}" to page.body) }
     add("completion" to TUTORIAL_COMPLETION)
-    add("watch" to TUTORIAL_WATCH)
     add("hand-done" to TUTORIAL_HAND_DONE)
 }
 
@@ -285,7 +296,8 @@ fun narrationIdFor(displayText: String): String? = narrationIdByDisplay[displayT
  * Expands card-table notation for the synthesizer: "J♠" → "jack of spades", "10NT" →
  * "10 no trumps", "+140" → "plus 140". Everything else is spoken as written.
  */
-fun speechText(display: String): String = display
+fun speechText(display: String): String = SPEECH_SUBSTITUTIONS
+    .fold(display) { text, (from, to) -> text.replace(from, to) }
     .replace(CARD_NOTATION) { m ->
         val rank = when (val r = m.groupValues[1]) {
             "A" -> "ace"; "K" -> "king"; "Q" -> "queen"; "J" -> "jack"
@@ -298,6 +310,7 @@ fun speechText(display: String): String = display
     }
     .replace(NO_TRUMP_BID) { m -> "${m.groupValues[1]} no trumps" }
     .replace(PLUS_POINTS) { m -> "plus ${m.groupValues[1]}" }
+    .replace(SHOUTED_WORD) { m -> m.value.lowercase() }
 
 /**
  * The live tutorial state handed to [GameScreen]: the index of the next human decision in

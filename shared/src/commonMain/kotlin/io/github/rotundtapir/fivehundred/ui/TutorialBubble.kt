@@ -71,12 +71,14 @@ internal fun TutorialBubble(
     val lastTrick = view.lastTrick
     val trickHeld = view.phase == Phase.PLAY && view.currentTrick.isEmpty() &&
         lastTrick != null && !view.isMyTurn
+    // While the bots act there is deliberately NO bubble: an ever-present "watch the table" box
+    // added noise (and narration) without teaching anything — the moving cards speak for themselves.
     val text = when {
         step == null -> TUTORIAL_HAND_DONE
         isHumanDecision -> step.advice
         trickHeld -> tutorialTrickNotes[view.trickNumber]
             ?: "${seatLabel(view, botNames, lastTrick.winner)} won the trick; tap it to continue."
-        else -> TUTORIAL_WATCH
+        else -> return
     }
     val targetKey = when {
         !isHumanDecision -> "trick"
