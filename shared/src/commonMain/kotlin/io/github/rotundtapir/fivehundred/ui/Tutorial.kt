@@ -85,8 +85,9 @@ val tutorialPrologue: List<TutorialPage> = listOf(
         title = "Bidding and the kitty",
         body = "Each hand opens with an auction. A bid like 7♠ is a promise: \"my team will " +
             "win at least 7 of the 10 tricks, with spades as trumps.\" The highest bid becomes " +
-            "the contract, and the winning bidder gets a reward: the kitty, the 3 cards left " +
-            "over from the deal, picked up into hand with any 3 cards discarded in return. " +
+            "the contract, and the winning bidder gets a reward: the kitty. Those are the 3 " +
+            "cards left over from the deal, picked up into hand with any 3 cards discarded " +
+            "in return. " +
             "Make the contract and your team scores its value; fall short and you lose that " +
             "much instead, while the defending team scores 10 points for every trick it takes.",
     ),
@@ -152,7 +153,7 @@ val tutorialSteps: List<TutorialStep> = listOf(
         ),
         advice = "Winning the auction gave you the kitty: Q♣, 8♣ and K♥. Keep every trump and " +
             "your high cards, and throw the three weakest odd cards: the 5♣, 7♦ and 8♣. " +
-            "Short side suits let you trump those suits sooner. " +
+            "Keeping side suits short lets you trump them sooner. " +
             "Swipe the hand sideways if a card is out of view.",
     ),
     TutorialStep.PlayStep(
@@ -251,7 +252,12 @@ private val CARD_NOTATION = Regex("(10|[2-9AKQJ])([♠♥♦♣])")
 private val NO_TRUMP_BID = Regex("\\b(10|[6-9])NT\\b")
 private val PLUS_POINTS = Regex("\\+(\\d+)")
 
-/** Phrase-level speech substitutions where synthesizers stumble on the written form. */
+/**
+ * Phrase-level speech substitutions where synthesizers stumble on the written form. RULE: a
+ * substitution may only change how the SAME words are rendered (numerals, notation, dropped
+ * duplication) — never insert words the screen doesn't show, or the voice audibly diverges for
+ * anyone reading along. Phrasing problems are fixed in the display text instead.
+ */
 private val SPEECH_SUBSTITUTIONS = listOf(
     // A bare "10" in this idiom draws an awkward pause; the word flows.
     "score 10 a trick" to "score ten a trick",

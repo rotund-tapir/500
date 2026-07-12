@@ -6,33 +6,34 @@
 # clips match the words again. Commit the resulting MP3s + manifest.txt.
 #
 # Pipeline: a shared unit test dumps the (id, speech-text) lines to build/narration-texts.tsv;
-# Chatterbox TTS (Resemble AI, MIT — chosen by ear over Piper and Kokoro in the 2026-07-12
-# audition) synthesizes each line; ffmpeg encodes mono MP3s into the shared module's compose
-# resources; each text's SHA-256 lands in manifest.txt for the drift gate.
+# Qwen3-TTS (Apache-2.0 — chosen by ear over Piper, Kokoro and Chatterbox in the 2026-07-12
+# audition; Higgs v3 was disqualified by its non-commercial license) synthesizes each line with
+# the Aiden voice; ffmpeg encodes mono MP3s into the shared module's compose resources; each
+# text's SHA-256 lands in manifest.txt for the drift gate.
 #
-# Chatterbox is a 0.5B model: on CUDA the full set renders in ~2 minutes, on CPU it takes HOURS.
-# Run this script on a machine with an NVIDIA GPU (it falls back to CPU with a warning). If the
-# GPU lives elsewhere, run the script there and copy the narration directory back — the manifest
-# travels with the clips.
+# The model is 1.7B: on CUDA the full set renders in ~10 minutes; CPU is impractical. Run this
+# script on a machine with an NVIDIA GPU. If the GPU lives elsewhere, run the script there and
+# copy the narration directory back — the manifest travels with the clips.
 #
-# Re-rolling: Chatterbox SAMPLES, so a take can come out mangled ("outrank" as an acronym) with
-# nothing wrong in the text. Pass clip ids to regenerate just those lines with a fresh roll:
+# Re-rolling: generation samples, so a take can occasionally come out mangled with nothing wrong
+# in the text. Pass clip ids to regenerate just those lines with a fresh roll:
 #   scripts/generate-narration.sh step-4 step-5
 # Partial re-rolls require the texts to be unchanged (the manifest hash is checked); after any
 # text edit, run the full regeneration instead.
 #
 # One-time setup (on the rendering machine):
-#   python3 -m venv ~/.venvs/chatterbox && ~/.venvs/chatterbox/bin/pip install chatterbox-tts soundfile
+#   python3 -m venv ~/.venvs/qwen-tts && ~/.venvs/qwen-tts/bin/pip install -U qwen-tts soundfile
 #   ffmpeg on PATH
-#   (Python 3.14: spacy_pkuseg has no wheel — needs gcc to build; triton's JIT needs python3-devel.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PYTHON="${PYTHON:-$HOME/.venvs/chatterbox/bin/python}"
+PYTHON="${PYTHON:-$HOME/.venvs/qwen-tts/bin/python}"
+VOICE="${VOICE:-Aiden}"
+INSTRUCT="${INSTRUCT:-Clear and concise, explaining a new concept.}"
 OUT=shared/src/commonMain/composeResources/files/narration
 TEXTS=shared/build/narration-texts.tsv
 
-[ -x "$PYTHON" ] || { echo "chatterbox venv python not found at $PYTHON (see setup in this script's header)"; exit 1; }
+[ -x "$PYTHON" ] || { echo "qwen-tts venv python not found at $PYTHON (see setup in this script's header)"; exit 1; }
 command -v ffmpeg >/dev/null || { echo "ffmpeg not on PATH"; exit 1; }
 
 echo "Dumping narration texts from Tutorial.kt…"
@@ -59,29 +60,31 @@ fi
 WAVDIR=$(mktemp -d)
 trap 'rm -rf "$WAVDIR"' EXIT
 
-echo "Synthesizing with Chatterbox…"
-TEXTS="$TEXTS" WAVDIR="$WAVDIR" "$PYTHON" - <<'PYEOF'
+echo "Synthesizing with Qwen3-TTS ($VOICE)…"
+TEXTS="$TEXTS" WAVDIR="$WAVDIR" VOICE="$VOICE" INSTRUCT="$INSTRUCT" "$PYTHON" - <<'PYEOF'
 import os
-import perth
-# perth's implicit watermarker does not load on Python 3.14; the shipped dummy keeps generation
-# working. (The watermark is an optional provenance feature of the library, not a license term.)
-perth.PerthImplicitWatermarker = perth.DummyWatermarker
 import torch
 import soundfile as sf
-from chatterbox.tts import ChatterboxTTS
+from qwen_tts import Qwen3TTSModel
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-if device == "cpu":
-    print("WARNING: no CUDA device — this will take hours; render on the GPU box instead.")
-model = ChatterboxTTS.from_pretrained(device=device)
+if not torch.cuda.is_available():
+    raise SystemExit("no CUDA device — render on the GPU box instead (see script header)")
+# float16 also covers pre-Ampere GPUs (no bf16 on Turing, e.g. the 2080 Ti).
+model = Qwen3TTSModel.from_pretrained(
+    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    device_map="cuda:0",
+    dtype=torch.float16,
+)
 for line in open(os.environ["TEXTS"]):
     line = line.rstrip("\n")
     if not line:
         continue
     id_, text = line.split("\t", 1)
-    wav = model.generate(text)
-    sf.write(f"{os.environ['WAVDIR']}/{id_}.wav", wav.squeeze(0).cpu().numpy(), model.sr)
-    print(f"  {id_}: {wav.shape[1] / model.sr:.1f}s")
+    wavs, sr = model.generate_custom_voice(
+        text=text, language="English", speaker=os.environ["VOICE"], instruct=os.environ["INSTRUCT"],
+    )
+    sf.write(f"{os.environ['WAVDIR']}/{id_}.wav", wavs[0], sr)
+    print(f"  {id_}: {len(wavs[0]) / sr:.1f}s")
 PYEOF
 
 mkdir -p "$OUT"
@@ -91,7 +94,7 @@ if [ "$#" -eq 0 ]; then
   MANIFEST="$OUT/manifest.txt"
   {
     echo "# Generated by scripts/generate-narration.sh — do not edit."
-    echo "# engine: chatterbox-tts (default voice)"
+    echo "# engine: qwen3-tts-1.7b-customvoice, voice: $VOICE, instruct: $INSTRUCT"
   } > "$MANIFEST"
 fi
 
