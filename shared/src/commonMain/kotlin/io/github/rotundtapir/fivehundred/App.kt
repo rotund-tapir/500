@@ -152,7 +152,9 @@ fun FiveHundredApp(
     // tapped while the app is open) with a new code re-triggers.
     LaunchedEffect(joinCodeOverride) {
         val code = JoinLink.normalizeCode(joinCodeOverride) ?: return@LaunchedEffect
-        onlineVm.enterWithJoinCode(serverUrl, appConfig.version, appConfig.platform, code)
+        onlineVm.enterWithJoinCode(
+            serverUrl, appConfig.version, appConfig.platform, code, appConfig.flavor, appConfig.commit,
+        )
         appScreen = AppScreen.ONLINE.name
     }
     val startTutorial: () -> Unit = {
@@ -233,7 +235,9 @@ fun FiveHundredApp(
                 onStartTutorial = startTutorial,
                 narration = narration,
                 onPlayWithFriends = {
-                    onlineVm.enter(serverUrl, appConfig.version, appConfig.platform)
+                    onlineVm.enter(
+                        serverUrl, appConfig.version, appConfig.platform, appConfig.flavor, appConfig.commit,
+                    )
                     appScreen = AppScreen.ONLINE.name
                 },
                 settings = settingsControls,
