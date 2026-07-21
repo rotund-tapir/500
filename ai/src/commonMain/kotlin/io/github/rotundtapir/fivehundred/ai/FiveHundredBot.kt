@@ -79,7 +79,7 @@ class FiveHundredBot(
      * weak hands. Callers pick the winner with [ScoreSchedule.rank], which prefers the
      * higher-scoring denomination when trick estimates tie.
      */
-    private fun candidateBids(hand: List<Card>): List<Bid> = buildList {
+    internal fun candidateBids(hand: List<Card>): List<Bid> = buildList {
         for (trump in Trump.entries) {
             val level = floor(estimateTricks(hand, trump)).toInt()
             if (level >= 6) add(Bid.Named(level.coerceAtMost(10), trump))
@@ -91,7 +91,7 @@ class FiveHundredBot(
     }
 
     /** Expected tricks for [trump], dispatching to the suit or no-trump model. */
-    private fun estimateTricks(hand: List<Card>, trump: Trump): Double =
+    internal fun estimateTricks(hand: List<Card>, trump: Trump): Double =
         if (trump.isNoTrump) estimateNoTrumpTricks(hand) else estimateSuitTricks(hand, trump)
 
     /**
@@ -173,7 +173,7 @@ class FiveHundredBot(
         }
     }
 
-    private fun misereDanger(card: Card): Int = when (card) {
+    internal fun misereDanger(card: Card): Int = when (card) {
         is Joker -> 1000
         is SuitedCard -> card.rank.ordinal
     }
@@ -243,7 +243,7 @@ class FiveHundredBot(
      * (TrickEvaluator scores every trump at 100+, above any side card's rank ordinal; the led
      * suit never affects a trump's strength).
      */
-    private fun rawStrength(card: Card, eval: TrickEvaluator): Int =
+    internal fun rawStrength(card: Card, eval: TrickEvaluator): Int =
         if (eval.isTrump(card)) eval.strength(card, null)
         else (card as? SuitedCard)?.rank?.ordinal ?: 0
 }

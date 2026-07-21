@@ -239,7 +239,8 @@ class GameFlowTest {
     @Test
     fun helpRules_openFromSettings_andDocumentTheBowers() {
         rule.onNodeWithTag("settingsButton").performClick()
-        rule.onNodeWithTag("helpButton").performClick()
+        // The dialog body scrolls; the button rows can sit below the fold (see the sibling test).
+        rule.onNodeWithTag("helpButton").performScrollTo().performClick()
         waitForText("Rules of 500")
         assertTrue(textExists("bower", substring = true))
         assertTrue("scoring table must show the 10NT value", textExists("520", substring = true))

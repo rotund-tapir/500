@@ -3,6 +3,7 @@ package io.github.rotundtapir.fivehundred.ui
 
 import androidx.compose.runtime.Immutable
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.BotSkill
 
 /**
  * The settings dialog's plumbing, bundled: each setting's current value plus its write-through
@@ -20,6 +21,8 @@ data class SettingsControls(
     val onSetHoldTricks: (Boolean) -> Unit,
     val soundVolume: Float,
     val onSetSoundVolume: (Float) -> Unit,
+    val botSkill: BotSkill,
+    val onSetBotSkill: (BotSkill) -> Unit,
     val misereEnabled: Boolean,
     val onSetMisereEnabled: (Boolean) -> Unit,
     val noTrumpsEnabled: Boolean,

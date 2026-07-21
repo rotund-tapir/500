@@ -66,6 +66,14 @@ class DataStoreSettingsRepository internal constructor(
         dataStore.edit { preferences -> preferences[HOLD_TRICKS_KEY] = value }
     }
 
+    override val botSkill: Flow<BotSkill> = dataStore.data.map { preferences ->
+        BotSkill.fromName(preferences[BOT_SKILL_KEY]) ?: SettingsDefaults.BOT_SKILL
+    }
+
+    override suspend fun setBotSkill(value: BotSkill) {
+        dataStore.edit { preferences -> preferences[BOT_SKILL_KEY] = value.name }
+    }
+
     override val soundVolume: Flow<Float> = dataStore.data.map { preferences ->
         (preferences[SOUND_VOLUME_KEY] ?: SettingsDefaults.SOUND_VOLUME).coerceIn(0f, 1f)
     }
@@ -104,6 +112,7 @@ class DataStoreSettingsRepository internal constructor(
         val MISERE_ENABLED_KEY = booleanPreferencesKey(SettingsKeys.MISERE_ENABLED)
         val NO_TRUMPS_ENABLED_KEY = booleanPreferencesKey(SettingsKeys.NO_TRUMPS_ENABLED)
         val HOLD_TRICKS_KEY = booleanPreferencesKey(SettingsKeys.HOLD_TRICKS)
+        val BOT_SKILL_KEY = stringPreferencesKey(SettingsKeys.BOT_SKILL)
         val SOUND_VOLUME_KEY = floatPreferencesKey(SettingsKeys.SOUND_VOLUME)
         val NARRATION_ENABLED_KEY = booleanPreferencesKey(SettingsKeys.NARRATION_ENABLED)
         val SERVER_URL_KEY = stringPreferencesKey(SettingsKeys.SERVER_URL)

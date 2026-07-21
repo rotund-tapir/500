@@ -15,6 +15,9 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":engine"))
+            // Already shipped transitively via cardkit-core; declared for AdvancedBot's own
+            // suspend/yield search loop (zero download-size delta).
+            implementation(libs.kotlinx.coroutines.core)
         }
         jvmTest.dependencies {
             implementation(kotlin("test"))

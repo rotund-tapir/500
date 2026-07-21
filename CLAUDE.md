@@ -123,6 +123,10 @@ Most modules are Kotlin Multiplatform; `wasmJs` is the browser target throughout
 seat, action)` is a pure reducer; `GameDriver` loops it, asking each seat's `Player` to decide.
 - **Determinism:** the whole match derives from `rngSeed` in `GameState`, which evolves per deal. Same
   seed ⇒ identical match. Tests and reproducibility depend on this — don't introduce nondeterminism.
+  One deliberate exception: the opt-in Advanced AI (`ai/AdvancedBot`, a wall-clock-budgeted Monte
+  Carlo search) is nondeterministic across devices in production; tests pin it down with
+  `SearchConfig(timeBudgetEnabled = false)` (fixed iterations ⇒ pure function of seed). The default
+  bot, the tutorial, and the engine itself stay strictly seed-deterministic.
 - **`PlayerView` is redacted per-seat** (own hand + public info only). This is the multiplayer seam:
   `Player` is `suspend`, so a local AI (`StrategyPlayer`), a human (`ChannelPlayer`, driven by the UI),
   or a future `RemotePlayer` are interchangeable with no engine change. Never widen `PlayerView` to

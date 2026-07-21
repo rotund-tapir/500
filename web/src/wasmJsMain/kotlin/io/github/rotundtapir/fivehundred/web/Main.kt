@@ -16,6 +16,7 @@ import io.github.rotundtapir.cardkit.ui.CardArtWarmup
 import io.github.rotundtapir.cardkit.ui.theme.CardkitTheme
 import io.github.rotundtapir.fivehundred.AnimationSpeed
 import io.github.rotundtapir.fivehundred.AppConfig
+import io.github.rotundtapir.fivehundred.BotSkill
 import io.github.rotundtapir.fivehundred.FiveHundredApp
 import io.github.rotundtapir.fivehundred.ProjectLinks
 import io.github.rotundtapir.fivehundred.web.generated.resources.Res
@@ -45,6 +46,8 @@ fun main() {
     val seedOverride = params.get("seed")?.toLongOrNull()
     val animationSpeedOverride = AnimationSpeed.fromName(params.get("animationSpeed"))
     val soundVolumeOverride = params.get("soundVolume")?.toFloatOrNull()
+    val botSkillOverride = BotSkill.fromName(params.get("botSkill"))
+    val aiBudgetMillisOverride = params.get("aiBudgetMs")?.toLongOrNull()
     val serverUrlOverride = params.get("serverUrl")
     val playerNameOverride = params.get("playerName")
     // Invite deep link: …github.io/500/?joinCode=12AB opens online mode at the prefilled join screen.
@@ -94,6 +97,8 @@ fun main() {
                     joinCodeOverride = joinCodeOverride,
                     animationSpeedOverride = animationSpeedOverride,
                     soundVolumeOverride = soundVolumeOverride,
+                    botSkillOverride = botSkillOverride,
+                    aiBudgetMillisOverride = aiBudgetMillisOverride,
                     serverUrlOverride = serverUrlOverride,
                     playerNameOverride = playerNameOverride,
                 )

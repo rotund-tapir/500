@@ -10,7 +10,10 @@ import io.github.rotundtapir.cardkit.core.Player
 import io.github.rotundtapir.cardkit.core.Seat
 import io.github.rotundtapir.cardkit.core.StrategyPlayer
 import io.github.rotundtapir.cardkit.core.Suit
+import io.github.rotundtapir.fivehundred.ai.AdvancedBot
+import io.github.rotundtapir.fivehundred.ai.AdvancedBotPlayer
 import io.github.rotundtapir.fivehundred.ai.FiveHundredBot
+import io.github.rotundtapir.fivehundred.ai.SearchConfig
 import io.github.rotundtapir.fivehundred.engine.Action
 import io.github.rotundtapir.fivehundred.engine.Bid
 import io.github.rotundtapir.fivehundred.engine.FiveHundredRules
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Drives a game of 500 for the human at seat 0 against `playerCount - 1` [FiveHundredBot] opponents.
@@ -81,6 +85,10 @@ class GameViewModel : ViewModel() {
         misereEnabled: Boolean = true,
         noTrumpsEnabled: Boolean = true,
         teamCount: Int = 2,
+        botSkill: BotSkill = BotSkill.STANDARD,
+        // Test knob: shrinks the advanced bot's trick budget to this many ms (bid 3x, kitty 2x —
+        // the production ratio), so instrumented/e2e suites think at test speed. Null = defaults.
+        aiBudgetMillis: Long? = null,
     ) {
         gameJob?.cancel()
         state.value = null
@@ -96,12 +104,42 @@ class GameViewModel : ViewModel() {
         _botNames.value = (1 until playerCount).associate { i -> Seat(i) to names[i - 1] }
         val players: Map<Seat, Player<PlayerView, Action>> = buildMap {
             put(humanSeat, human)
-            for (i in 1 until playerCount) put(Seat(i), paced(StrategyPlayer(bot, Random(seed + i))))
+            for (i in 1 until playerCount) put(Seat(i), paced(botPlayer(botSkill, gameRules, seed, i, aiBudgetMillis)))
         }
         gameJob = viewModelScope.launch {
             GameDriver(gameRules, players).play(gameRules.newGame(seed)) { snapshot -> state.value = snapshot }
         }
     }
+
+    /**
+     * The bot for seat [i]: the shared heuristic, or — with the Advanced AI setting on — a
+     * per-seat Monte-Carlo [AdvancedBot] (stateful card tracking) run off the main thread by
+     * [AdvancedBotPlayer]. Both take `Random(seed + i)`, the established per-seat convention.
+     */
+    private fun botPlayer(
+        botSkill: BotSkill,
+        gameRules: FiveHundredRules,
+        seed: Long,
+        i: Int,
+        aiBudgetMillis: Long?,
+    ): Player<PlayerView, Action> = when (botSkill) {
+        BotSkill.STANDARD -> StrategyPlayer(bot, Random(seed + i))
+        BotSkill.ADVANCED -> AdvancedBotPlayer(
+            AdvancedBot(rules = gameRules, config = advancedConfig(aiBudgetMillis)),
+            Random(seed + i),
+        )
+    }
+
+    private fun advancedConfig(budgetMillis: Long?): SearchConfig =
+        if (budgetMillis == null) {
+            SearchConfig()
+        } else {
+            SearchConfig(
+                bidBudget = (budgetMillis * 3).milliseconds,
+                kittyBudget = (budgetMillis * 2).milliseconds,
+                playBudget = budgetMillis.milliseconds,
+            )
+        }
 
     /** Wraps a bot so its turns are visibly paced by the current [animationSpeed] (see [PacingGates]). */
     private fun paced(inner: Player<PlayerView, Action>): Player<PlayerView, Action> =

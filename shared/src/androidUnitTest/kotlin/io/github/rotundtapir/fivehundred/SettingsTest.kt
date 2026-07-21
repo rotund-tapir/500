@@ -36,6 +36,19 @@ class AnimationSpeedTest {
     }
 }
 
+/** [BotSkill] lenient parsing (mirrors [AnimationSpeed]'s contract for persisted values). */
+class BotSkillTest {
+
+    @Test
+    fun `fromName parses known names and rejects the rest`() {
+        assertEquals(BotSkill.STANDARD, BotSkill.fromName("STANDARD"))
+        assertEquals(BotSkill.ADVANCED, BotSkill.fromName("ADVANCED"))
+        assertEquals(null, BotSkill.fromName("advanced")) // exact name match only
+        assertEquals(null, BotSkill.fromName("ULTRA"))
+        assertEquals(null, BotSkill.fromName(null))
+    }
+}
+
 /**
  * [DataStoreSettingsRepository] against a real temp-file [DataStore] via its internal
  * DataStore-injecting constructor — no Android runtime, no Robolectric.
@@ -63,6 +76,7 @@ class DataStoreSettingsRepositoryTest {
         assertEquals(SettingsDefaults.MISERE_ENABLED, repo.misereEnabled.first())
         assertEquals(SettingsDefaults.NO_TRUMPS_ENABLED, repo.noTrumpsEnabled.first())
         assertEquals(SettingsDefaults.HOLD_TRICKS, repo.holdTricks.first())
+        assertEquals(SettingsDefaults.BOT_SKILL, repo.botSkill.first())
         assertEquals(SettingsDefaults.SOUND_VOLUME, repo.soundVolume.first())
         assertEquals(SettingsDefaults.SERVER_URL, repo.serverUrl.first())
         assertEquals(SettingsDefaults.PLAYER_NAME, repo.playerName.first())
@@ -77,6 +91,7 @@ class DataStoreSettingsRepositoryTest {
         repo.setMisereEnabled(false)
         repo.setNoTrumpsEnabled(false)
         repo.setHoldTricks(true)
+        repo.setBotSkill(BotSkill.ADVANCED)
         repo.setSoundVolume(0.3f)
         repo.setServerUrl("ws://localhost:8080")
         repo.setPlayerName("Alice")
@@ -88,6 +103,7 @@ class DataStoreSettingsRepositoryTest {
         assertEquals(false, reopened.misereEnabled.first())
         assertEquals(false, reopened.noTrumpsEnabled.first())
         assertEquals(true, reopened.holdTricks.first())
+        assertEquals(BotSkill.ADVANCED, reopened.botSkill.first())
         assertEquals(0.3f, reopened.soundVolume.first())
         assertEquals("ws://localhost:8080", reopened.serverUrl.first())
         assertEquals("Alice", reopened.playerName.first())
@@ -105,6 +121,13 @@ class DataStoreSettingsRepositoryTest {
         val store = newStore()
         store.edit { it[stringPreferencesKey(SettingsKeys.ANIMATION_SPEED)] = "TURBO" }
         assertEquals(SettingsDefaults.ANIMATION_SPEED, DataStoreSettingsRepository(store).animationSpeed.first())
+    }
+
+    @Test
+    fun `an unrecognised stored bot skill falls back to the default`() = runTest {
+        val store = newStore()
+        store.edit { it[stringPreferencesKey(SettingsKeys.BOT_SKILL)] = "ULTRA" }
+        assertEquals(SettingsDefaults.BOT_SKILL, DataStoreSettingsRepository(store).botSkill.first())
     }
 
     @Test

@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.rotundtapir.cardkit.monetization.Monetization
+import io.github.rotundtapir.fivehundred.BotSkill
 import io.github.rotundtapir.fivehundred.LocalAppConfig
 import io.github.rotundtapir.fivehundred.SettingsDefaults
 
@@ -147,6 +148,31 @@ fun SettingsDialog(
                         modifier = Modifier.testTag("noTrumpsEnabled"),
                     )
                 }
+
+                HorizontalDivider()
+
+                Text("Bot opponents (apply to new games)", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Advanced AI", color = houseRuleColor)
+                    Switch(
+                        checked = settings.botSkill == BotSkill.ADVANCED,
+                        onCheckedChange = {
+                            settings.onSetBotSkill(if (it) BotSkill.ADVANCED else BotSkill.STANDARD)
+                        },
+                        enabled = !inGame,
+                        modifier = Modifier.testTag("advancedAi"),
+                    )
+                }
+                Text(
+                    "Bots think for up to a few seconds per move. Stronger play, uses more " +
+                        "battery. Local games only.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 HorizontalDivider()
 

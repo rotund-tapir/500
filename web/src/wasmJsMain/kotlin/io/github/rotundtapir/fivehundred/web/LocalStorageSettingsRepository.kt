@@ -2,6 +2,7 @@
 package io.github.rotundtapir.fivehundred.web
 
 import io.github.rotundtapir.fivehundred.AnimationSpeed
+import io.github.rotundtapir.fivehundred.BotSkill
 import io.github.rotundtapir.fivehundred.SettingsDefaults
 import io.github.rotundtapir.fivehundred.SettingsKeys
 import io.github.rotundtapir.fivehundred.SettingsRepository
@@ -64,6 +65,16 @@ class LocalStorageSettingsRepository : SettingsRepository {
     override suspend fun setHoldTricks(value: Boolean) {
         store(SettingsKeys.HOLD_TRICKS, value.toString())
         holdTricksFlow.value = value
+    }
+
+    private val botSkillFlow = MutableStateFlow(
+        BotSkill.fromName(stored(SettingsKeys.BOT_SKILL)) ?: SettingsDefaults.BOT_SKILL,
+    )
+    override val botSkill: Flow<BotSkill> = botSkillFlow
+
+    override suspend fun setBotSkill(value: BotSkill) {
+        store(SettingsKeys.BOT_SKILL, value.name)
+        botSkillFlow.value = value
     }
 
     private val soundVolumeFlow = MutableStateFlow((stored(SettingsKeys.SOUND_VOLUME)?.toFloatOrNull() ?: SettingsDefaults.SOUND_VOLUME).coerceIn(0f, 1f))

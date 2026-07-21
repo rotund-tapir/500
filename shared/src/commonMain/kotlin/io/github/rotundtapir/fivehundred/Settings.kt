@@ -23,6 +23,24 @@ enum class AnimationSpeed(val label: String, val botDelayMillis: Long) {
 }
 
 /**
+ * Which AI drives the bot opponents in local games. [STANDARD] is the fast heuristic;
+ * [ADVANCED] is the Monte-Carlo search bot (stronger, thinks for up to a few seconds per move).
+ * An enum rather than a Boolean so a future level slots in without a storage-key migration.
+ */
+enum class BotSkill(val label: String) {
+    STANDARD("Standard"),
+    ADVANCED("Advanced");
+
+    companion object {
+        /**
+         * Lenient parse for persisted values and test overrides (intent extras, URL parameters):
+         * the matching entry, or null when [name] is unset or unrecognised.
+         */
+        fun fromName(name: String?): BotSkill? = entries.find { it.name == name }
+    }
+}
+
+/**
  * Storage key names, shared byte-for-byte by the DataStore (Android) and localStorage (web)
  * backends. Renaming one orphans every user's saved value for that setting on that platform.
  */
@@ -32,6 +50,7 @@ object SettingsKeys {
     const val MISERE_ENABLED = "misere_enabled"
     const val NO_TRUMPS_ENABLED = "no_trumps_enabled"
     const val HOLD_TRICKS = "hold_tricks"
+    const val BOT_SKILL = "bot_skill"
     const val SOUND_VOLUME = "sound_volume"
     const val NARRATION_ENABLED = "narration_enabled"
     const val SERVER_URL = "server_url"
@@ -48,6 +67,7 @@ object SettingsDefaults {
     const val MISERE_ENABLED = true
     const val NO_TRUMPS_ENABLED = true
     const val HOLD_TRICKS = false
+    val BOT_SKILL = BotSkill.STANDARD
     const val SOUND_VOLUME = 0.7f
 
     /** Tutorial voice narration — on by default; the home screen advertises it and offers the mute. */
@@ -90,6 +110,11 @@ interface SettingsRepository {
     val holdTricks: Flow<Boolean>
 
     suspend fun setHoldTricks(value: Boolean)
+
+    /** Which bot AI new local games use ([SettingsDefaults.BOT_SKILL] when unset). Applies to new games. */
+    val botSkill: Flow<BotSkill>
+
+    suspend fun setBotSkill(value: BotSkill)
 
     /** Sound-effect volume, 0f (muted) to 1f; [SettingsDefaults.SOUND_VOLUME] when unset. */
     val soundVolume: Flow<Float>

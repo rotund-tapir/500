@@ -50,6 +50,10 @@ fun FiveHundredApp(
     joinCodeOverride: String? = null,
     animationSpeedOverride: AnimationSpeed? = null,
     soundVolumeOverride: Float? = null,
+    // Test overrides for the bot AI: pin the skill and shrink the search budgets so e2e suites can
+    // exercise the advanced path at test speed. In-memory only, never persisted.
+    botSkillOverride: BotSkill? = null,
+    aiBudgetMillisOverride: Long? = null,
     // Test overrides (web URL params): seed the server URL / player name so e2e can point at a local
     // server and skip canvas text entry.
     serverUrlOverride: String? = null,
@@ -77,6 +81,8 @@ fun FiveHundredApp(
     val scope = rememberCoroutineScope()
     val misereEnabled by settings.misereEnabled.collectAsState(initial = SettingsDefaults.MISERE_ENABLED)
     val noTrumpsEnabled by settings.noTrumpsEnabled.collectAsState(initial = SettingsDefaults.NO_TRUMPS_ENABLED)
+    val persistedBotSkill by settings.botSkill.collectAsState(initial = SettingsDefaults.BOT_SKILL)
+    val botSkill = botSkillOverride ?: persistedBotSkill
     val persistedVolume by settings.soundVolume.collectAsState(initial = SettingsDefaults.SOUND_VOLUME)
     val soundVolume = soundVolumeOverride ?: persistedVolume
     // One sound engine for the whole app: reacts to game-state transitions, and hands back a play
@@ -110,6 +116,8 @@ fun FiveHundredApp(
         onSetHoldTricks = { value -> scope.launch { settings.setHoldTricks(value) } },
         soundVolume = soundVolume,
         onSetSoundVolume = { value -> scope.launch { settings.setSoundVolume(value) } },
+        botSkill = botSkill,
+        onSetBotSkill = { value -> scope.launch { settings.setBotSkill(value) } },
         misereEnabled = misereEnabled,
         onSetMisereEnabled = { value -> scope.launch { settings.setMisereEnabled(value) } },
         noTrumpsEnabled = noTrumpsEnabled,
@@ -150,7 +158,15 @@ fun FiveHundredApp(
     val startTutorial: () -> Unit = {
         // The tutorial script depends on the exact table: 4 players, 2 teams, misère and no-trumps
         // enabled — pinned here regardless of the user's mode selection and house-rule settings.
-        vm.newGame(TUTORIAL_SEED, playerCount = 4, misereEnabled = true, noTrumpsEnabled = true, teamCount = 2)
+        // The bot skill is pinned too: the script is a trace of the STANDARD heuristic on this seed.
+        vm.newGame(
+            TUTORIAL_SEED,
+            playerCount = 4,
+            misereEnabled = true,
+            noTrumpsEnabled = true,
+            teamCount = 2,
+            botSkill = BotSkill.STANDARD,
+        )
         tutorialStepIndex = 0
         tutorialActive = true
         appScreen = AppScreen.GAME.name
@@ -197,7 +213,15 @@ fun FiveHundredApp(
                 mode = mode,
                 onModeChange = { modeName = it.name },
                 onStart = {
-                    vm.newGame(nextSeed(), mode.players, misereEnabled, noTrumpsEnabled, mode.teams)
+                    vm.newGame(
+                        nextSeed(),
+                        mode.players,
+                        misereEnabled,
+                        noTrumpsEnabled,
+                        mode.teams,
+                        botSkill = botSkill,
+                        aiBudgetMillis = aiBudgetMillisOverride,
+                    )
                     tutorialActive = false
                     appScreen = AppScreen.GAME.name
                 },

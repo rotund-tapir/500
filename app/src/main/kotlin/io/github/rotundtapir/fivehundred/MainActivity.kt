@@ -38,6 +38,18 @@ class MainActivity : ComponentActivity() {
          * instrumentation tests so the online screens prefill without canvas text entry.
          */
         const val EXTRA_PLAYER_NAME = "io.github.rotundtapir.fivehundred.PLAYER_NAME"
+
+        /**
+         * Intent extra (a [BotSkill] name) overriding the persisted bot AI — set by instrumentation
+         * tests to exercise the advanced path without touching the persisted setting.
+         */
+        const val EXTRA_BOT_SKILL = "io.github.rotundtapir.fivehundred.BOT_SKILL"
+
+        /**
+         * Intent extra (Long, milliseconds) shrinking the advanced bot's per-trick search budget
+         * (bid 3x, kitty 2x) so instrumented games think at test speed.
+         */
+        const val EXTRA_AI_BUDGET_MS = "io.github.rotundtapir.fivehundred.AI_BUDGET_MS"
     }
 
     private lateinit var monetization: Monetization
@@ -68,6 +80,14 @@ class MainActivity : ComponentActivity() {
     private fun animationSpeedOverride(): AnimationSpeed? =
         AnimationSpeed.fromName(intent?.getStringExtra(EXTRA_ANIMATION_SPEED))
 
+    /** The bot skill forced by the launching intent, or null to use the persisted setting. */
+    private fun botSkillOverride(): BotSkill? =
+        BotSkill.fromName(intent?.getStringExtra(EXTRA_BOT_SKILL))
+
+    /** The advanced-AI budget forced by the launching intent, or null for the production budgets. */
+    private fun aiBudgetMillisOverride(): Long? =
+        if (intent?.hasExtra(EXTRA_AI_BUDGET_MS) == true) intent.getLongExtra(EXTRA_AI_BUDGET_MS, 0) else null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         monetization = MonetizationProvider.create(this)
@@ -87,6 +107,8 @@ class MainActivity : ComponentActivity() {
                     joinCodeOverride = deepLinkJoinCode,
                     animationSpeedOverride = animationSpeedOverride(),
                     soundVolumeOverride = soundVolumeOverride(),
+                    botSkillOverride = botSkillOverride(),
+                    aiBudgetMillisOverride = aiBudgetMillisOverride(),
                     serverUrlOverride = intent?.getStringExtra(EXTRA_SERVER_URL),
                     playerNameOverride = intent?.getStringExtra(EXTRA_PLAYER_NAME),
                 )
