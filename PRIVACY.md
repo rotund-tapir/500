@@ -1,6 +1,6 @@
 # Privacy Policy — 500
 
-_Last updated: 2026-07-10_
+_Last updated: 2026-07-21_
 
 ## The free/libre build (F-Droid, GitHub releases)
 
@@ -23,6 +23,10 @@ server you configure yourself under **Settings → Online**.
   does). The official server uses it transiently to enforce anti-abuse limits
   (per-IP connection/rate caps) and, on repeated abuse, temporary IP bans via
   fail2ban. It is not used for tracking or advertising and is not shared.
+- **Aggregate statistics:** the official server counts connections in aggregate
+  by platform, app version, and distribution flavour (web / F-Droid / Play) to
+  see which builds are in use. These are anonymous counts only — they are not
+  linked to your IP address, display name, or anything else about you.
 - **Retention:** the official server keeps **all game state in memory only** —
   there is no database and nothing is persisted; a server restart discards
   everything. Operational logs (including abuse events) are short-lived and

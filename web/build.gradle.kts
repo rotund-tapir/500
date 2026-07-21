@@ -22,11 +22,12 @@ val generateAppVersion by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/appVersion")
     val versionValue = providers.gradleProperty("appVersionName").get()
     // The short git commit this build was made from, reported to the online server for diagnostics.
-    // Falls back to "unknown" when git isn't available (e.g. a source-tarball build).
+    // Falls back to empty when git isn't available (e.g. a source-tarball build) — Hello then
+    // omits the field from the wire entirely (it's a default-valued optional field).
     val commitValue = runCatching {
         providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }
             .standardOutput.asText.get().trim()
-    }.getOrNull()?.ifBlank { null } ?: "unknown"
+    }.getOrDefault("")
     outputs.dir(outputDir)
     inputs.property("version", versionValue)
     inputs.property("commit", commitValue)

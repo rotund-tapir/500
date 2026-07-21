@@ -78,6 +78,7 @@ class RoomRegistry(
         if (!claimCode(room)) return CreateResult.ServerFull
         byGameId[gameId] = room
         room.start()
+        metrics.lobbyCreated()
         logger.info(
             "lobby created code={} game={} players={} teams={}",
             room.joinCode,

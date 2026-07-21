@@ -16,6 +16,7 @@ import io.github.rotundtapir.fivehundred.net.ConfigureLobby
 import io.github.rotundtapir.fivehundred.net.ConnectionState
 import io.github.rotundtapir.fivehundred.net.CreateLobby
 import io.github.rotundtapir.fivehundred.net.DisbandLobby
+import io.github.rotundtapir.fivehundred.net.Distribution
 import io.github.rotundtapir.fivehundred.net.Emote
 import io.github.rotundtapir.fivehundred.net.EmoteReceived
 import io.github.rotundtapir.fivehundred.net.ErrorCode
@@ -31,7 +32,6 @@ import io.github.rotundtapir.fivehundred.net.LobbyState
 import io.github.rotundtapir.fivehundred.net.OccupancyStatus
 import io.github.rotundtapir.fivehundred.net.PROTOCOL_VERSION
 import io.github.rotundtapir.fivehundred.net.PickSeat
-import io.github.rotundtapir.fivehundred.net.Distribution
 import io.github.rotundtapir.fivehundred.net.Platform
 import io.github.rotundtapir.fivehundred.net.RequestRematch
 import io.github.rotundtapir.fivehundred.net.ResumedState

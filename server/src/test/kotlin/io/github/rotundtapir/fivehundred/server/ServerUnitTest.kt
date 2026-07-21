@@ -2,7 +2,9 @@
 package io.github.rotundtapir.fivehundred.server
 
 import io.github.rotundtapir.cardkit.core.Seat
+import io.github.rotundtapir.fivehundred.net.Distribution
 import io.github.rotundtapir.fivehundred.net.LobbyConfig
+import io.github.rotundtapir.fivehundred.net.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -152,6 +154,54 @@ class ServerUnitTest {
         assertTrue(text.contains("fivehundred_rooms_active 3"))
         assertTrue(text.contains("fivehundred_draining 1"))
         assertTrue(text.contains("fivehundred_rejections_total{reason="))
+    }
+
+    @Test
+    fun `per-build metrics admit only release-shaped version labels`() {
+        val metrics = Metrics()
+        metrics.connectAccepted(Platform.WEB, Distribution.WEB, "0.3.6")
+        // Client-controlled junk — including an attempted forged journal/exposition line — never
+        // becomes a label value; it is bucketed as "other".
+        metrics.connectAccepted(Platform.ANDROID, Distribution.UNKNOWN, "999.0.0\nABUSE event=x ip=1.2.3.4")
+        metrics.connectAccepted(Platform.ANDROID, Distribution.FOSS, "not-a-version")
+        val text = metrics.render(roomsActive = 0, draining = false)
+        assertTrue(
+            text.contains("""fivehundred_connects_by_build_total{platform="web",flavor="web",version="0.3.6"} 1"""),
+        )
+        assertTrue(
+            text.contains("""fivehundred_connects_by_build_total{platform="android",flavor="foss",version="other"} 1"""),
+        )
+        assertFalse(text.contains("ABUSE"), "raw client input must never reach the exposition")
+    }
+
+    @Test
+    fun `per-build metrics cap distinct label sets`() {
+        val metrics = Metrics()
+        repeat(200) { metrics.connectAccepted(Platform.WEB, Distribution.WEB, "0.$it.0") }
+        val labelled = metrics.render(roomsActive = 0, draining = false)
+            .lines().filter { it.startsWith("fivehundred_connects_by_build_total{") }
+        assertTrue(labelled.size <= 65, "cardinality must stay bounded; got ${labelled.size} label sets")
+        assertTrue(labelled.any { it.contains("version=\"other\"") }, "overflow lands in the other bucket")
+    }
+
+    @Test
+    fun `stats window reports aggregate deltas then resets`() {
+        val metrics = Metrics()
+        metrics.connectAccepted(Platform.WEB, Distribution.WEB, "0.3.6")
+        metrics.connectAccepted(Platform.WEB, Distribution.WEB, "0.3.6")
+        metrics.connectAccepted(Platform.ANDROID, Distribution.FOSS, "0.3.5")
+        metrics.lobbyCreated()
+        assertEquals(
+            "stats window=1h connects=3 by-flavor foss=1 web=2 by-version 0.3.5=1 0.3.6=2 lobbies=1",
+            metrics.drainStatsWindow(),
+        )
+        assertEquals("stats window=1h connects=0 lobbies=0", metrics.drainStatsWindow(), "window resets")
+        metrics.connectAccepted(Platform.WEB, Distribution.WEB, "0.3.6")
+        assertEquals(
+            "stats window=1h connects=1 by-flavor web=1 by-version 0.3.6=1 lobbies=0",
+            metrics.drainStatsWindow(),
+            "only the new window's connects are reported",
+        )
     }
 
     @Test

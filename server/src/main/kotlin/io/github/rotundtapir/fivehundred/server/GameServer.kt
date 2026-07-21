@@ -45,6 +45,7 @@ class GameServer(
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     private val logger = LoggerFactory.getLogger("connect")
+    private val statsLogger = LoggerFactory.getLogger("stats")
 
     val sessionRegistry = SessionRegistry(nowMillis = nowMillis)
     val rooms = RoomRegistry(config, scope, sessionRegistry, metrics, abuseLog, nowMillis)
@@ -56,7 +57,7 @@ class GameServer(
 
     fun nextConnectionId(): Long = connectionIds.incrementAndGet()
 
-    /** Start background maintenance (currently: evicting stale session tokens). Call once at boot. */
+    /** Start background maintenance: evicting stale session tokens + the hourly stats line. Call once at boot. */
     fun startMaintenance() {
         scope.launch {
             val interval = (config.sessionTtlMillis / SESSION_SWEEPS_PER_TTL)
@@ -65,6 +66,15 @@ class GameServer(
                 delay(interval)
                 sessionRegistry.evictStale(config.sessionTtlMillis)
                 lobbyThrottle.evictStale()
+            }
+        }
+        scope.launch {
+            // The journal's long-term record of who plays what: hourly aggregate counts, no
+            // personal data (see Metrics.drainStatsWindow) — safe to retain for the full journald
+            // retention window.
+            while (true) {
+                delay(STATS_INTERVAL_MILLIS)
+                statsLogger.info(metrics.drainStatsWindow())
             }
         }
     }
@@ -147,19 +157,23 @@ class GameServer(
     }
 
     /**
-     * Log a newly-established connection (after a successful [Hello]). One line per client carries the
-     * build telemetry — platform, distribution flavour, version and git commit — plus the resumed
-     * lobby code when a session token was honoured. The commit is empty for pre-telemetry clients.
+     * Record a newly-established connection (after a successful [Hello]) in the aggregate per-build
+     * metrics. Deliberately NOT a per-connection log line in production: the journal never learns
+     * who connected (no IP, no identifier) — only how many per platform/flavour/version, via
+     * [Metrics.connectAccepted] and the hourly stats line — which keeps PRIVACY.md's "nothing is
+     * persisted" true. Dev mode logs a verbose line for live debugging, with the client-controlled
+     * fields sanitized so nothing unvalidated can forge journal content (the journal feeds fail2ban).
      */
     fun onConnected(connection: PlayerConnection, resumeRoom: Room?) {
+        metrics.connectAccepted(connection.platform, connection.buildFlavor, connection.appVersion)
+        if (!config.devMode) return
         logger.info(
-            "connect id={} ip={} platform={} flavor={} version={} commit={} resume={}",
+            "connect id={} platform={} flavor={} version={} commit={} resume={}",
             connection.id,
-            connection.remoteIp,
             connection.platform.name.lowercase(),
             connection.buildFlavor.name.lowercase(),
-            connection.appVersion,
-            connection.commit.ifBlank { "-" },
+            connection.appVersion.replace(WHITESPACE, " ").take(VERSION_LOG_LIMIT),
+            connection.commit.takeIf { COMMIT_FORMAT.matches(it) } ?: "-",
             resumeRoom?.joinCode ?: "-",
         )
     }
@@ -256,8 +270,14 @@ class GameServer(
 
     private companion object {
         const val LOBBY_WINDOW_MILLIS = 10L * 60 * 1000
+        const val STATS_INTERVAL_MILLIS = 60L * 60 * 1000
         const val NAME_LOG_LIMIT = 24
         const val CODE_LOG_LIMIT = 8
+        const val VERSION_LOG_LIMIT = 24
+
+        /** A git short-to-full hash — the only shape of client-supplied commit worth logging. */
+        val COMMIT_FORMAT = Regex("[0-9a-f]{4,40}")
+        val WHITESPACE = Regex("""\s+""")
         const val SESSION_SWEEPS_PER_TTL = 4L
         const val MIN_SWEEP_INTERVAL_MILLIS = 30_000L
         const val MAX_SWEEP_INTERVAL_MILLIS = 15 * 60_000L

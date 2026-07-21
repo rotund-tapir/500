@@ -50,15 +50,24 @@ fail2ban-client status 500-server           # current bans (game server jail)
 fail2ban-client status sshd                  # ssh jail
 ```
 
-The app log also carries INFO telemetry, one line each:
-- `connect id=.. ip=.. platform=.. flavor=.. version=.. commit=.. resume=..` — every accepted client,
-  with its build (platform android/web, distribution web/play/foss, app version, git commit).
+The app log also carries INFO telemetry. **No personal data lands in the journal** — display names
+and IPs are never logged on the happy path (PRIVACY.md depends on this; only ABUSE lines carry an
+IP, for fail2ban), so the full journald retention window is fine. One line each:
 - `lobby created code=.. game=.. players=.. teams=..` — every new lobby.
-- `join code=.. seat=.. name=.. creator=.. conn=..` — every player seated (correlate `conn=` with a
-  `connect` line's `id=` for that player's build).
+- `join code=.. seat=.. creator=.. conn=..` — every player seated (`conn=` is an ephemeral
+  per-process connection id; deliberately no `name=`).
+- `stats window=1h connects=.. by-flavor foss=.. play=.. web=.. by-version 0.3.6=.. lobbies=..` —
+  hourly aggregate of accepted connections by distribution flavour and app version. This is the
+  long-term "who plays what" record: anonymous counts only.
 
-Useful filters: `journalctl CONTAINER_NAME=500-server -g '^.*(connect|lobby created|join) ' --no-pager`,
-or count clients by flavour: `journalctl CONTAINER_NAME=500-server -g 'connect ' -o cat | grep -oP 'flavor=\K\S+' | sort | uniq -c`.
+Per-connection detail (`connect id=.. platform=.. flavor=.. version=.. commit=.. resume=..`) is
+logged **only under `DEV_MODE=true`** — never on the public server. Live cumulative per-build
+counts are also on `/metrics` (`fivehundred_connects_by_build_total{platform,flavor,version}`;
+the version label is validated and the label-set count capped, so a hostile client can't explode
+cardinality).
+
+Useful filters: `journalctl CONTAINER_NAME=500-server -g 'stats window' --no-pager` for the trend
+history, `journalctl CONTAINER_NAME=500-server -g 'lobby created|join ' --no-pager` for activity.
 
 **Log volume / disk:** both containers use the journald log driver, so all of this lands in the
 systemd journal. It is capped in `/etc/systemd/journald.conf.d/size.conf` (installed by

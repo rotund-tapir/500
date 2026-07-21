@@ -88,8 +88,9 @@ if [[ ! -f $DOCKER_CFG ]] || [[ "$(cat "$DOCKER_CFG")" != "$NEW_DOCKER_CFG" ]]; 
 fi
 mkdir -p /etc/systemd/journald.conf.d
 # Both containers log via the journald driver, so bounding the journal is what stops logs — including
-# the per-connection/lobby/join telemetry — from filling the disk. journald auto-vacuums to these
-# limits; logrotate is not involved (it manages text files, not the binary journal).
+# the lobby/join/hourly-stats telemetry — from filling the disk. journald auto-vacuums to these
+# limits; logrotate is not involved (it manages text files, not the binary journal). The month of
+# retention is fine privacy-wise: the happy-path telemetry is anonymous (no IPs or names logged).
 cat > /etc/systemd/journald.conf.d/size.conf <<'EOF'
 [Journal]
 SystemMaxUse=200M

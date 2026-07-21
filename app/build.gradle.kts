@@ -16,11 +16,12 @@ fun secret(name: String): String? =
 val releaseKeystore: String? = secret("KEYSTORE_FILE")
 
 // The short git commit this build was made from, reported to the online server on connect for
-// diagnostics. Falls back to "unknown" when git isn't available (e.g. an F-Droid tarball build).
+// diagnostics. Falls back to empty when git isn't available (e.g. an F-Droid tarball build) —
+// Hello then omits the field from the wire entirely (it's a default-valued optional field).
 val gitCommit: String = runCatching {
     providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }
         .standardOutput.asText.get().trim()
-}.getOrNull()?.ifBlank { null } ?: "unknown"
+}.getOrDefault("")
 
 android {
     namespace = "io.github.rotundtapir.fivehundred"

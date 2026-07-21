@@ -177,11 +177,13 @@ class Room(
             return
         }
         seat(cmd.connection, free, validated)
+        // No name= here: display names are personal data and must stay out of the journal
+        // (PRIVACY.md promises nothing user-identifying is persisted). seat= + the ephemeral
+        // conn= id are enough to follow an actor through a debugging session.
         logger.info(
-            "join code={} seat={} name={} creator={} conn={}",
+            "join code={} seat={} creator={} conn={}",
             joinCode,
             free.seat.index,
-            validated,
             isCreator(cmd.connection),
             cmd.connection.id,
         )
