@@ -227,8 +227,10 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
   `deploy-server` then SSHes to the VPS, drains, pins `IMAGE_TAG`, and `docker compose pull && up`.
   It needs the `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_PORT`/`DEPLOY_KNOWN_HOSTS` repo secrets (a
   dedicated CI-only ed25519 key) and the GHCR package to be public; see `docs/server-runbook.md`.
-  Gotcha: re-deploying the *same* version leaves the box drained (`up -d` doesn't recreate an
-  unchanged image, so the drain flag persists) — undrain manually, or a new version recreates it.
+  Gotcha (now guarded): re-deploying the *same* version used to leave the box drained (`up -d`
+  doesn't recreate an unchanged image, so the in-memory drain flag persisted); the deploy job now
+  POSTs `/admin/undrain` unconditionally after `up`, a no-op on a real deploy. Manual undrain:
+  `docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/undrain`.
 - fastlane metadata (`fastlane/metadata/android/en-US/`) is the store listing: `title.txt`,
   descriptions, `changelogs/<versionCode>.txt`, and `images/phoneScreenshots/`. Keep the changelog
   file in sync with `versionCode` bumps.

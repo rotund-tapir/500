@@ -283,6 +283,11 @@ jobs:
           sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${VERSION}/" .env
           docker compose pull server
           docker compose up -d --wait
+          # Unconditional undrain: a real deploy recreates the container (fresh process starts
+          # undrained — this is a no-op), but a SAME-version re-run leaves the drained old
+          # container in place ('up -d' sees nothing to change), which would otherwise refuse
+          # every new lobby while /health still 200s and CI goes green.
+          docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/undrain || true
           # The Caddyfile is a read-only bind mount, so a content change doesn't recreate the caddy
           # container; reload it explicitly in case this deploy shipped Caddyfile changes.
           docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || docker compose restart caddy
