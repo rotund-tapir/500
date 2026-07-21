@@ -229,7 +229,9 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
   Google-encrypted blob. Release stays un-minified until a release-QA pass justifies R8.
 - A `v*` tag also **ships the online server**: `publish-server-image` builds the `:server` dist into
   a multi-arch image and pushes it to `ghcr.io/rotundtapir/500-server` (`:<version>` + `:latest`);
-  `deploy-server` then SSHes to the VPS, drains, pins `IMAGE_TAG`, and `docker compose pull && up`.
+  `deploy-server` then SSHes to the VPS, pins `IMAGE_TAG`, and `docker compose pull && up` — no
+  drain-and-wait since room snapshots (restart-safe rejoin); drain manually first only for a
+  deploy that bumps `RoomSnapshot.CURRENT_VERSION` (see `docs/server-runbook.md`).
   It needs the `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_PORT`/`DEPLOY_KNOWN_HOSTS` repo secrets (a
   dedicated CI-only ed25519 key) and the GHCR package to be public; see `docs/server-runbook.md`.
   Gotcha (now guarded): re-deploying the *same* version used to leave the box drained (`up -d`

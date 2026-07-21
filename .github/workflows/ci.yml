@@ -265,28 +265,22 @@ jobs:
           rsync -e "ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_ed25519" -av \
             server/deploy/docker-compose.yml server/deploy/Caddyfile \
             root@${{ secrets.DEPLOY_HOST }}:/opt/500-server/
-      - name: Drain, pin version, and bring up
+      - name: Pin version and bring up
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ssh -p "${{ secrets.DEPLOY_PORT }}" -i ~/.ssh/id_ed25519 root@"${{ secrets.DEPLOY_HOST }}" bash -s <<EOF
           set -e
           cd /opt/500-server
-          # If anything below fails, undrain the OLD container so the box keeps serving instead of
-          # being stranded in drain mode (where every CreateLobby is refused but /health still 200s).
-          trap 'docker exec 500-server wget -qO- --post-data="" http://localhost:8080/admin/undrain || true' ERR
-          docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/drain || true
-          for i in \$(seq 1 30); do
-            g=\$(docker exec 500-server wget -qO- http://localhost:8080/health 2>/dev/null | grep -o '"activeGames":[0-9]*' | grep -o '[0-9]*' || echo 0)
-            [ "\$g" = "0" ] && break
-            sleep 30
-          done
+          # No drain-and-wait: room snapshots (DATA_DIR) survive the restart and clients
+          # reconnect into their seats, so blocking new lobbies for up to 15 min bought nothing.
+          # For a deploy that bumps the snapshot schema version, drain MANUALLY first so games
+          # finish on the old code instead of being dropped at restore — see the runbook.
           sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${VERSION}/" .env
           docker compose pull server
           docker compose up -d --wait
-          # Unconditional undrain: a real deploy recreates the container (fresh process starts
-          # undrained — this is a no-op), but a SAME-version re-run leaves the drained old
-          # container in place ('up -d' sees nothing to change), which would otherwise refuse
-          # every new lobby while /health still 200s and CI goes green.
+          # Unconditional undrain: a fresh container starts undrained (no-op), but a SAME-version
+          # re-run leaves the old container in place ('up -d' sees nothing to change) — if that one
+          # was drained it would refuse every new lobby while /health still 200s and CI goes green.
           docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/undrain || true
           # The Caddyfile is a read-only bind mount, so a content change doesn't recreate the caddy
           # container; reload it explicitly in case this deploy shipped Caddyfile changes.

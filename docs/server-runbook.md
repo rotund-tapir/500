@@ -20,16 +20,24 @@ public, add an UptimeRobot monitor. See [DNS setup](#dns-porkbun) below.
 
 ## Deploys
 
-CI deploys automatically on a `v*` tag (`.github/workflows/ci.yml` → `deploy-server`): it drains the
-server, waits for active games to finish (cap ~15 min), pins the new `IMAGE_TAG` in
-`/opt/500-server/.env`, and runs `docker compose pull && up -d --wait`, then verifies
-`https://500.29022617.xyz/health`.
+CI deploys automatically on a `v*` tag (`.github/workflows/ci.yml` → `deploy-server`): it pins the
+new `IMAGE_TAG` in `/opt/500-server/.env`, runs `docker compose pull && up -d --wait`, undrains
+unconditionally, and verifies `https://500.29022617.xyz/health`.
 
-Since room snapshots (`DATA_DIR=/data`, the `server_data` volume), a restart no longer ends
-in-flight games — the new process restores every room at boot and clients reconnect into their
-seats automatically. The drain-and-wait step is therefore belt-and-braces rather than load-bearing
-(it lets most games end on the *old* code, so a mid-game deploy across a protocol/engine change is
-the rare case, not the norm). Keep it.
+There is deliberately **no drain-and-wait** in the deploy: room snapshots (`DATA_DIR=/data`, the
+`server_data` volume) mean the new process restores every room at boot and clients reconnect into
+their seats automatically — while draining blocked all *new* lobbies for up to 15 minutes per
+release. The one deploy that should still drain first is one that **bumps the snapshot schema
+version** (`RoomSnapshot.CURRENT_VERSION` — a restore-incompatible engine/state change), so games
+finish on the old code instead of being dropped at restore. Do that manually before pushing the tag:
+
+```bash
+docker exec 500-server wget -qO- --post-data='' http://localhost:8080/admin/drain
+watch -n 30 'docker exec 500-server wget -qO- http://localhost:8080/health'   # until activeGames:0
+```
+
+(the deploy's unconditional undrain then reopens the box; games running past your patience get
+dropped at restore, which is the pre-snapshot status quo).
 
 Required repo secrets: `DEPLOY_SSH_KEY` (a dedicated ed25519 private key; its public half in
 `/root/.ssh/authorized_keys`), `DEPLOY_HOST` (the IP — not DNS, so deploys don't depend on it),
