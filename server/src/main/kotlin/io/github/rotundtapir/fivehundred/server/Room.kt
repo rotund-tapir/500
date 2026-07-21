@@ -722,6 +722,7 @@ class Room(
         if (phase == RoomPhase.PLAYING && state == null) return
         persistence.save(
             RoomSnapshot(
+                snapshotVersion = RoomSnapshot.CURRENT_VERSION,
                 gameId = gameId,
                 joinCode = joinCode,
                 creatorToken = creatorToken,

@@ -32,6 +32,14 @@ import kotlin.io.path.writeText
  */
 @Serializable
 data class RoomSnapshot(
+    /**
+     * Schema version of this snapshot, checked at restore. Deliberately has no default: writers
+     * must state it, and a pre-versioning file fails to decode instead of masquerading as v1. Bump
+     * [CURRENT_VERSION] on any incompatible change to this class, [GameState], or the engine's
+     * interpretation of a state — a mismatched snapshot is dropped at boot (that room degrades to
+     * the pre-persistence behaviour: the game is lost, the server is fine).
+     */
+    val snapshotVersion: Int,
     val gameId: String,
     val joinCode: String,
     val creatorToken: String,
@@ -50,6 +58,10 @@ data class RoomSnapshot(
         val isBot: Boolean,
         val ownerToken: String?,
     )
+
+    companion object {
+        const val CURRENT_VERSION = 1
+    }
 }
 
 /**

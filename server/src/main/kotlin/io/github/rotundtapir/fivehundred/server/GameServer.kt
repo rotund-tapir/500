@@ -69,17 +69,31 @@ class GameServer(
         if (!persistence.durable) return
         var restored = 0
         for (snapshot in persistence.loadAll()) {
-            val idleMillis = config.idleDisbandMillisOverride ?: (snapshot.lobbyConfig.idleDisbandMinutes * 60_000L)
-            val expired = nowMillis() - snapshot.savedAtMillis >= idleMillis
-            val playable = snapshot.phase != RoomPhase.FINISHED &&
-                !(snapshot.phase == RoomPhase.PLAYING && snapshot.gameState == null)
-            if (expired || !playable) {
+            if (!restorable(snapshot)) {
                 persistence.delete(snapshot.gameId)
                 continue
             }
             if (rooms.restore(snapshot) != null) restored++
         }
         if (restored > 0) logger.info("restored {} room(s) from snapshots", restored)
+    }
+
+    private fun restorable(snapshot: RoomSnapshot): Boolean {
+        if (snapshot.snapshotVersion != RoomSnapshot.CURRENT_VERSION) {
+            // A deliberate cross-version refusal (see RoomSnapshot.snapshotVersion): losing the
+            // room beats restoring a state this build might misinterpret.
+            logger.warn(
+                "dropping snapshot {}: schema version {} (this server writes {})",
+                snapshot.gameId,
+                snapshot.snapshotVersion,
+                RoomSnapshot.CURRENT_VERSION,
+            )
+            return false
+        }
+        val idleMillis = config.idleDisbandMillisOverride ?: (snapshot.lobbyConfig.idleDisbandMinutes * 60_000L)
+        if (nowMillis() - snapshot.savedAtMillis >= idleMillis) return false // would have been reaped anyway
+        return snapshot.phase != RoomPhase.FINISHED &&
+            !(snapshot.phase == RoomPhase.PLAYING && snapshot.gameState == null)
     }
 
     /** Start background maintenance (currently: evicting stale session tokens). Call once at boot. */

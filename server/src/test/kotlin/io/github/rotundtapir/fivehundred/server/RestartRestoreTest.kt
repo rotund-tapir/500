@@ -269,6 +269,27 @@ class RestartRestoreTest {
     }
 
     @Test
+    fun `a snapshot from a different schema version is dropped at boot`() {
+        val dataDir = createTempDirectory("snapshots")
+        val scope = CoroutineScope(SupervisorJob())
+        try {
+            val persistence = FileRoomPersistence(dataDir, scope)
+            persistence.save(
+                snapshot(gameId = "future", joinCode = "DDDD", savedAtMillis = System.currentTimeMillis())
+                    .copy(snapshotVersion = RoomSnapshot.CURRENT_VERSION + 1),
+            )
+            awaitFileCount(dataDir, 1)
+
+            val server = GameServer(ServerConfig(devMode = true, dataDir = dataDir.toString()), scope)
+            server.restoreRooms()
+            assertEquals(0, server.rooms.roomCount(), "a version-mismatched snapshot must not restore")
+            awaitFileCount(dataDir, 0)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun `snapshots round-trip through the file store`() {
         val dataDir = createTempDirectory("snapshots")
         val scope = CoroutineScope(SupervisorJob())
@@ -278,6 +299,11 @@ class RestartRestoreTest {
             persistence.save(saved)
             awaitFileCount(dataDir, 1)
             assertEquals(listOf(saved), persistence.loadAll())
+            // The schema version must be present in the file itself, not just filled by a decoder
+            // default — it is what lets a future server refuse this snapshot deliberately.
+            assertTrue(
+                dataDir.listDirectoryEntries("*.json").first().readText().contains("snapshotVersion"),
+            )
 
             persistence.delete("g1")
             awaitFileCount(dataDir, 0)
@@ -305,6 +331,7 @@ class RestartRestoreTest {
     }
 
     private fun snapshot(gameId: String, joinCode: String, savedAtMillis: Long) = RoomSnapshot(
+        snapshotVersion = RoomSnapshot.CURRENT_VERSION,
         gameId = gameId,
         joinCode = joinCode,
         creatorToken = "tok-$gameId",

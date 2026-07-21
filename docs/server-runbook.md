@@ -38,7 +38,8 @@ Required repo secrets: `DEPLOY_SSH_KEY` (a dedicated ed25519 private key; its pu
 ## Roll back a bad deploy
 
 Every release image is an immutable semver tag and the box holds no durable state (room snapshots
-are transient and version-tolerant to read), so rollback is just re-pinning the previous tag:
+are transient; they carry a schema version and a server that doesn't match it drops that room at
+boot rather than guessing), so rollback is just re-pinning the previous tag:
 
 ```bash
 ssh -p 51753 root@193.30.120.150
