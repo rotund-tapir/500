@@ -164,9 +164,11 @@ the concrete impl is chosen by a **flavor-specific `MonetizationProvider`** in `
 **only the `play` flavor depends on** (`"playImplementation"(...)`), so the FOSS build graph is
 provably free of non-free code. Do not add GMS/Billing/Firebase anywhere the `foss` build can reach.
 
-Play-flavor specifics: UMP/GDPR consent is gathered at launch before any ad (debug builds force EEA
-geography so the form is always exercisable); settings shows a "Privacy options" button when the CMP
-requires one. The interstitial shows **once per game** — on "Back to menu" from the win/lose dialog —
+Play-flavor specifics: startup is billing-first — a cached `remove_ads` entitlement skips UMP
+consent and the ads SDK entirely (paying users' devices never talk to ad servers), and with no
+cache, consent waits briefly for Play Billing's verdict. Otherwise UMP/GDPR consent is gathered
+before any ad (debug builds force EEA geography so the form is always exercisable); settings shows
+a "Privacy options" button when the CMP requires one. The interstitial shows **once per game** — on "Back to menu" from the win/lose dialog —
 and the exit waits for `maybeShowInterstitial`'s `onDismissed` continuation, so nothing animates
 under an ad. Keep it that way for any future ad moment.
 
