@@ -23,6 +23,7 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.junit.jupiter)
             implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.kotlinx.serialization.json) // GameState snapshot round-trip test
             runtimeOnly(libs.junit.platform.launcher)
         }
     }

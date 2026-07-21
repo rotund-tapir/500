@@ -11,8 +11,9 @@ import kotlin.random.Random
 /**
  * The set of live rooms, indexed both by 4-character join code and by full game id. Also owns the
  * drain flag: while draining, no new lobbies may be created (so active games can finish before a
- * deploy/reboot restarts the process). All state is in-memory — a crashed/restarted server loses
- * every game, which is acceptable (a lost hand, not lost data) and hugely simplifies operations.
+ * deploy/reboot restarts the process). Live state is in-memory; with a durable [RoomPersistence]
+ * (`DATA_DIR` set) each room is also snapshotted to disk and [restore]d at boot, so a deploy or
+ * crash no longer loses in-flight games — seats are reclaimed via the ordinary session-token path.
  */
 class RoomRegistry(
     private val config: ServerConfig,
@@ -20,6 +21,7 @@ class RoomRegistry(
     private val sessionRegistry: SessionRegistry,
     private val metrics: Metrics,
     private val abuseLog: AbuseLog,
+    private val persistence: RoomPersistence = RoomPersistence.None,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     private val logger = LoggerFactory.getLogger("room")
@@ -72,6 +74,7 @@ class RoomRegistry(
             sessionRegistry = sessionRegistry,
             metrics = metrics,
             abuseLog = abuseLog,
+            persistence = persistence,
             nowMillis = nowMillis,
             onClosed = ::remove,
         )
@@ -86,6 +89,45 @@ class RoomRegistry(
             lobbyConfig.teamCount,
         )
         return CreateResult.Created(room)
+    }
+
+    /**
+     * Re-adopt a room persisted by a previous process. Boot-time only, before any client can
+     * connect, so the join code and game id are claimed without contention (a duplicate — two
+     * snapshots claiming one code — loses that room rather than the boot). Returns the live room,
+     * or null if it could not be adopted.
+     */
+    fun restore(snapshot: RoomSnapshot): Room? {
+        val room = Room(
+            gameId = snapshot.gameId,
+            joinCode = snapshot.joinCode,
+            creatorToken = snapshot.creatorToken,
+            initialConfig = snapshot.lobbyConfig,
+            requestedSeed = null,
+            scope = scope,
+            config = config,
+            sessionRegistry = sessionRegistry,
+            metrics = metrics,
+            abuseLog = abuseLog,
+            persistence = persistence,
+            nowMillis = nowMillis,
+            onClosed = ::remove,
+        )
+        if (byCode.putIfAbsent(snapshot.joinCode, room) != null) {
+            logger.warn("snapshot {} collides on code {}; dropping it", snapshot.gameId, snapshot.joinCode)
+            return null
+        }
+        byGameId[snapshot.gameId] = room
+        room.restoreFrom(snapshot)
+        room.start()
+        logger.info(
+            "lobby restored code={} game={} phase={} players={}",
+            snapshot.joinCode,
+            snapshot.gameId,
+            snapshot.phase,
+            snapshot.lobbyConfig.playerCount,
+        )
+        return room
     }
 
     /**

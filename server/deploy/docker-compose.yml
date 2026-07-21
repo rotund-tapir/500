@@ -32,6 +32,9 @@ services:
       TRUST_PROXY: "true"              # X-Forwarded-For comes from Caddy
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://rotundtapir.github.io}
       MIN_APP_VERSION: ${MIN_APP_VERSION:-0.3.0}
+      DATA_DIR: "/data"                # room snapshots: in-flight games survive a restart/deploy
+    volumes:
+      - server_data:/data
     mem_limit: 512m
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
@@ -43,3 +46,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  server_data:

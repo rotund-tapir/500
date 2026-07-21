@@ -38,6 +38,7 @@ data class Contract(val declarer: Seat, val bid: Bid) {
 }
 
 /** The live state of the auction. */
+@Serializable
 data class BiddingState(
     val history: List<Pair<Seat, Bid>> = emptyList(),
     val passed: Set<Seat> = emptySet(),
@@ -64,7 +65,11 @@ data class HandResult(
  *
  * [rngSeed] evolves deterministically each deal so the whole match is reproducible from the initial
  * seed — useful for tests and a future authoritative server.
+ *
+ * Serializable so the online server can snapshot in-flight games to disk and restore them after a
+ * restart — this is full hidden information (every hand and the kitty) and must never go to clients.
  */
+@Serializable
 data class GameState(
     val rngSeed: Long,
     val handNumber: Int,

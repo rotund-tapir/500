@@ -26,11 +26,17 @@ server you configure yourself under **Settings → Online**.
   does). The official server uses it transiently to enforce anti-abuse limits
   (per-IP connection/rate caps) and, on repeated abuse, temporary IP bans via
   fail2ban. It is not used for tracking or advertising and is not shared.
-- **Retention:** the official server keeps **all game state in memory only** —
-  there is no database and nothing is persisted; a server restart discards
-  everything. Operational logs (including connection records and abuse events)
-  are short-lived: the official server's journal is capped in size (200 MB) and
-  age (one month), after which entries are deleted automatically.
+- **Retention:** game state lives only as long as the game room itself. There
+  is no database: the server holds rooms in memory, plus a **transient
+  per-room snapshot on its own disk** whose sole purpose is to let in-progress
+  games survive a server restart or deploy. A snapshot holds exactly what the
+  room holds (the game, the chosen display names, and the random session
+  tokens that let players rejoin their seats) and is **deleted automatically
+  when the game ends, the lobby is closed, or the room sits idle past its
+  timeout** — at most a few hours. Operational logs (including connection
+  records and abuse events) are short-lived: the official server's journal is
+  capped in size (200 MB) and age (one month), after which entries are deleted
+  automatically.
 - **Self-hosting:** the server is open source and you can run your own and point
   the app at it, in which case the above applies to that operator instead. See
   [`docs/self-hosting.md`](docs/self-hosting.md).

@@ -6,8 +6,12 @@ The 500 game server is GPL and ships as a small container image
 for a private group, or to develop/test the app against a local server. Point any client at your
 server via **Settings → Online → Game server**.
 
-The server keeps **all state in memory**: a restart drops every in-progress game (a lost hand, not
-lost data). There is no database and nothing to back up.
+Live state is in memory; there is no database. Set **`DATA_DIR`** to a writable directory (the
+bundled compose file mounts a volume at `/data`) and the server also snapshots each room to disk,
+so in-progress games **survive a restart** — players rejoin their seats automatically with their
+session tokens. Snapshots are transient (deleted when a room ends or idles out) and are the only
+thing on disk; there is still nothing worth backing up. Without `DATA_DIR`, a restart drops every
+in-progress game (a lost hand, not lost data).
 
 ## Quick start — LAN, no TLS
 
@@ -60,6 +64,7 @@ certificate rate limit; comment it out and `docker compose restart caddy` once i
 | `LOBBIES_PER_IP_PER_10MIN` | `5` | Lobby-creation throttle. |
 | `MAX_ROOMS` | `500` | Server-wide room cap. |
 | `LOBBY_GRACE_MILLIS` | `900000` (15 min) | How long a lobby/post-game seat is held for its owner after a bare socket drop (a page reload, a network blip) before the room is disbanded (creator) or the seat freed (guest). |
+| `DATA_DIR` | *(unset)* | Directory for transient per-room snapshots. Set it (the bundled compose file uses `/data` on a volume) and in-progress games survive a server restart — players rejoin their seats automatically. Unset ⇒ in-memory only; a restart drops every game. |
 | `DEV_MODE` | `false` | Relaxes IP/rate limits and honours a client-supplied game seed. **Local testing only.** |
 
 ## Resource needs

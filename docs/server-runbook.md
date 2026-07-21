@@ -2,7 +2,9 @@
 # 500 server runbook (official VPS)
 
 The official server runs on a netcup VPS (1 vCPU / 1 GB, Debian 13) behind Caddy, in Docker Compose
-at `/opt/500-server`. State is in-memory; there is nothing to back up.
+at `/opt/500-server`. Live state is in-memory, with transient per-room snapshots in the
+`server_data` volume (`DATA_DIR=/data`) so in-flight games survive restarts and deploys — snapshots
+delete themselves when rooms end, so there is still nothing to back up.
 
 ## First-time bootstrap
 
@@ -23,14 +25,20 @@ server, waits for active games to finish (cap ~15 min), pins the new `IMAGE_TAG`
 `/opt/500-server/.env`, and runs `docker compose pull && up -d --wait`, then verifies
 `https://500.29022617.xyz/health`.
 
+Since room snapshots (`DATA_DIR=/data`, the `server_data` volume), a restart no longer ends
+in-flight games — the new process restores every room at boot and clients reconnect into their
+seats automatically. The drain-and-wait step is therefore belt-and-braces rather than load-bearing
+(it lets most games end on the *old* code, so a mid-game deploy across a protocol/engine change is
+the rare case, not the norm). Keep it.
+
 Required repo secrets: `DEPLOY_SSH_KEY` (a dedicated ed25519 private key; its public half in
 `/root/.ssh/authorized_keys`), `DEPLOY_HOST` (the IP — not DNS, so deploys don't depend on it),
 `DEPLOY_PORT`, `DEPLOY_KNOWN_HOSTS` (`ssh-keyscan -p <port> <ip>`).
 
 ## Roll back a bad deploy
 
-Every release image is an immutable semver tag and the box holds no state, so rollback is just
-re-pinning the previous tag:
+Every release image is an immutable semver tag and the box holds no durable state (room snapshots
+are transient and version-tolerant to read), so rollback is just re-pinning the previous tag:
 
 ```bash
 ssh -p 51753 root@193.30.120.150
@@ -39,7 +47,10 @@ sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<previous-version>/' .env
 docker compose up -d
 ```
 
-(Like any restart, this ends in-flight games — acceptable by design.)
+In-flight games are restored from their snapshots on the way back up. If the *snapshots themselves*
+are suspected bad (e.g. the bad deploy wrote states the old code can't restore), clear them first:
+`docker compose down && docker volume rm 500-server_server_data` — that ends in-flight games, the
+pre-snapshot behaviour.
 
 ## Inspecting logs
 

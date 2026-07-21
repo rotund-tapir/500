@@ -18,8 +18,10 @@ in-game moves, and connection metadata (IP) sent to the game server (see below).
 > display name** (not necessarily real; no email/phone/account) and **in-game moves** to the game
 > server, which also sees the **IP address** and uses it transiently for anti-abuse (rate/connection
 > caps, temporary fail2ban bans). No free-text chat (canned emotes only). The official server keeps
-> state **in memory only** — nothing persisted, no database. The multiplayer rows below reflect
-> this; re-check them if the server ever grows accounts, persistence, or free-text chat.
+> room state in memory plus a **transient on-disk snapshot per room** (v1.0: games survive a server
+> restart) that deletes itself when the room ends or idles out — no database, no accounts, nothing
+> outlives the room. The multiplayer rows below reflect this; re-check them if the server ever grows
+> accounts, longer retention, or free-text chat.
 
 ## Data safety form
 
@@ -29,7 +31,7 @@ in-game moves, and connection metadata (IP) sent to the game server (see below).
 | --- | --- |
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (TLS — wss:// for multiplayer) |
-| Do you provide a way for users to request that their data is deleted? | **No** — the app has no accounts and stores nothing about the user anywhere: settings are on-device, the multiplayer server is in-memory only (a display name lives exactly as long as the room), and the ads data is controlled via the device's advertising-ID reset/delete and the in-app "Privacy options" (UMP) form |
+| Do you provide a way for users to request that their data is deleted? | **No** — the app has no accounts and stores nothing about the user anywhere: settings are on-device, the multiplayer server keeps room data (a display name) only for the life of the room and deletes it automatically when the game ends or idles out, and the ads data is controlled via the device's advertising-ID reset/delete and the in-app "Privacy options" (UMP) form |
 
 **Data types — from the Google Mobile Ads SDK** (four rows). For each: **Collected: Yes ·
 Shared: Yes** (shared with Google as the ad provider), **Processed ephemerally: No**,
@@ -48,9 +50,12 @@ compliance** (it is not used for advertising).
 
 **Data types — from optional online multiplayer** (one row). Declare the display name and canned
 emotes under **App activity → Other user-generated content**: **Collected: Yes · Shared: No** (sent
-only to the game server we operate, not to any third party), **Processed ephemerally: Yes** (the
-server is in-memory only; everything vanishes when the room ends), **Optional** (only transmitted
-if the user chooses online play), purpose = **App functionality**. In-game moves ride the same
+only to the game server we operate, not to any third party), **Processed ephemerally: No** — since
+v1.0 the server keeps a transient on-disk room snapshot (so games survive a restart), which is
+outside the form's memory-only definition of ephemeral; the honest answer is No with room-lifetime
+retention (snapshots delete themselves when the room ends or idles out, at most hours). **Optional**
+(only transmitted if the user chooses online play), purpose = **App functionality**. In-game moves
+ride the same
 connection but are gameplay mechanics, not a distinct user-data type beyond the **App interactions**
 row already declared above for the ads SDK. Two deliberate non-declarations to be ready to defend:
 

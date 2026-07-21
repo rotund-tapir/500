@@ -31,6 +31,12 @@ data class ServerConfig(
      * The lobby idle-disband remains the backstop for genuinely abandoned rooms.
      */
     val lobbyDisconnectGraceMillis: Long = 15 * 60_000L,
+    /**
+     * Directory for room snapshots, so in-flight games survive a restart (rejoin via the existing
+     * session tokens). Null (the default) keeps the pre-v1.0 in-memory-only behaviour: a restart
+     * drops every game. The official deployment mounts a volume and sets `DATA_DIR=/data`.
+     */
+    val dataDir: String? = null,
     /** Relaxes IP caps and honours a client-supplied game seed. For local dev / e2e only. */
     val devMode: Boolean = false,
     /** Test hook: force the per-turn timeout to this many ms, ignoring the lobby's seconds setting. */
@@ -68,6 +74,7 @@ data class ServerConfig(
                 maxFrameBytes = long("MAX_FRAME_BYTES", 16 * 1024),
                 sessionTtlMillis = long("SESSION_TTL_MILLIS", 60 * 60_000L),
                 lobbyDisconnectGraceMillis = long("LOBBY_GRACE_MILLIS", 15 * 60_000L),
+                dataDir = getenv("DATA_DIR")?.takeIf { it.isNotBlank() },
                 devMode = bool("DEV_MODE", false),
             )
         }

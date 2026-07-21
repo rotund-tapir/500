@@ -42,8 +42,14 @@ fun main() {
     val config = ServerConfig.fromEnv()
     val scope = CoroutineScope(SupervisorJob())
     val server = GameServer(config, scope)
+    server.restoreRooms() // before the listener: a reconnect must find its restored room
     server.startMaintenance()
-    log.info("Starting 500 server on port {} (devMode={})", config.port, config.devMode)
+    log.info(
+        "Starting 500 server on port {} (devMode={}, dataDir={})",
+        config.port,
+        config.devMode,
+        config.dataDir ?: "-",
+    )
     embeddedServer(CIO, port = config.port) {
         gameServerModule(server, config)
     }.start(wait = true)
@@ -62,7 +68,10 @@ fun Application.gameServerModule(server: GameServer, config: ServerConfig) {
     if (config.trustProxy) install(XForwardedHeaders)
 
     monitor.subscribe(io.ktor.server.application.ApplicationStopPreparing) {
+        // With durable persistence, shutdown() is a no-op per room (snapshots outlive the process
+        // and clients reconnect); the flush pushes any still-queued snapshot writes to disk first.
         server.rooms.all().forEach { it.shutdown() }
+        server.persistence.flushSync()
     }
 
     routing {

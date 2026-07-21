@@ -59,6 +59,7 @@ class Room(
     private val sessionRegistry: SessionRegistry,
     private val metrics: Metrics,
     private val abuseLog: AbuseLog,
+    private val persistence: RoomPersistence,
     private val nowMillis: () -> Long,
     private val onClosed: (Room) -> Unit,
 ) {
@@ -85,6 +86,14 @@ class Room(
 
     /** The most recent accepted move, for idempotent handling of duplicate submissions. */
     private var lastAccepted: AcceptedMove? = null
+
+    /**
+     * Set while a snapshot-restored game is waiting for its first human to reconnect. The driver is
+     * deliberately NOT running yet: every restored seat is occupant-less, so an eagerly-started
+     * driver would bot-play the whole game to completion before anyone could reclaim a seat. The
+     * first successful reconnect starts it; the idle sweep reaps the room if nobody ever returns.
+     */
+    private var awaitingRestoredDriver = false
 
     /** The final scoreline once the game ends, so a late reconnector still sees the result. */
     private var finalResult: GameOver? = null
@@ -155,8 +164,10 @@ class Room(
             is RoomCommand.StateProduced -> onStateProduced(command.state)
             is RoomCommand.GameFinished -> onGameFinished(command.state)
             is RoomCommand.ForceDisband -> disband(command.reason)
+            is RoomCommand.ReleaseUnclaimedSeat -> onReleaseUnclaimedSeat(command.seat)
             RoomCommand.IdleCheck -> onIdleCheck()
         }
+        persist()
     }
 
     // --- Lobby ------------------------------------------------------------------------------------
@@ -171,7 +182,10 @@ class Room(
             reject(cmd.connection, ErrorCode.NAME_TAKEN, "Someone in this lobby is already called $validated")
             return
         }
-        val free = slots.firstOrNull { it.occupant == null && !it.isBot }
+        // ownerToken == null keeps a snapshot-restored seat (owned but occupant-less) reserved for
+        // its returning owner; live lobby seats always hold their occupant while owned, so the extra
+        // condition changes nothing outside a restore. ReleaseUnclaimedSeat frees it eventually.
+        val free = slots.firstOrNull { it.occupant == null && !it.isBot && it.ownerToken == null }
         if (free == null) {
             reject(cmd.connection, ErrorCode.LOBBY_FULL, "No free seats")
             return
@@ -210,7 +224,7 @@ class Room(
         val target = slots.getOrNull(cmd.seat.index)
             ?: return reject(cmd.connection, ErrorCode.BAD_CONFIG, "No such seat")
         if (target === from) return
-        if (target.occupant != null || target.isBot) {
+        if (target.occupant != null || target.isBot || target.ownerToken != null) {
             return reject(cmd.connection, ErrorCode.SEAT_TAKEN, "Seat taken")
         }
         val name = from.name
@@ -289,7 +303,14 @@ class Room(
         lastAccepted = null
         broadcastLobby()
         metrics.gameStarted()
-        val initial = gameRules.newGame(seed)
+        launchDriver(gameRules, players, gameRules.newGame(seed))
+    }
+
+    private fun launchDriver(
+        gameRules: FiveHundredRules,
+        players: Map<Seat, Player<PlayerView, Action>>,
+        initial: GameState,
+    ) {
         driverJob = scope.launch {
             runCatching {
                 val terminal = GameDriver(gameRules, players).play(initial) { state ->
@@ -355,6 +376,9 @@ class Room(
     private fun onGameFinished(state: GameState) {
         phase = RoomPhase.FINISHED
         driverJob = null
+        // A finished game needs no restart durability (the result was delivered; a rematch that
+        // returns the room to LOBBY re-saves it). Restores therefore never see FINISHED.
+        persistence.delete(gameId)
         metrics.gameCompleted()
         val winner = state.winner ?: -1
         val result = GameOver(winner, state.scores)
@@ -441,7 +465,19 @@ class Room(
         replayView(cmd.connection, cmd.seat)
         finalResult?.let { deliver(cmd.connection, it) } // a late reconnector still sees the result
         if (phase == RoomPhase.PLAYING) broadcastSeatStatus(cmd.seat, OccupancyStatus.HUMAN)
+        maybeStartRestoredDriver()
         recomputeEmptiness()
+    }
+
+    /** First reconnect into a restored game: the occupant is seated, so the driver may now run. */
+    private fun maybeStartRestoredDriver() {
+        if (!awaitingRestoredDriver || phase != RoomPhase.PLAYING) return
+        val gameRules = rules ?: return
+        val state = latestState ?: return
+        awaitingRestoredDriver = false
+        val players = HashMap<Seat, Player<PlayerView, Action>>()
+        for (slot in slots) slot.host?.let { players[slot.seat] = it }
+        launchDriver(gameRules, players, state)
     }
 
     /** Tell a client its resume can't be honoured (seat gone/reassigned) so it returns to entry. */
@@ -501,6 +537,20 @@ class Room(
     private fun onIdleCheck() {
         val since = emptySince ?: return
         if (nowMillis() - since >= idleDisbandMillis) disband(DisbandReason.IDLE_TIMEOUT)
+    }
+
+    private fun onReleaseUnclaimedSeat(seat: Seat) {
+        val slot = slots.getOrNull(seat.index) ?: return
+        // The owner reconnected (occupant set), the game started (seats then stay reclaimable for
+        // its whole duration), or the seat was already reassigned — all mean this release is stale.
+        if (slot.occupant != null || slot.ownerToken == null || phase != RoomPhase.LOBBY) return
+        // Mirrors the live grace expiry: a lobby whose creator is confirmed gone can never start.
+        if (slot.ownerToken == creatorToken) {
+            disband(DisbandReason.CREATOR_DISBANDED)
+            return
+        }
+        clearSlot(slot)
+        broadcastLobby()
     }
 
     // --- Helpers ----------------------------------------------------------------------------------
@@ -632,6 +682,7 @@ class Room(
             slot.occupant?.let { detachConnection(it) }
             slot.ownerToken?.let { sessionRegistry.clear(it) } // don't leave bindings pointing at a dead room
         }
+        persistence.delete(gameId)
         close()
     }
 
@@ -642,13 +693,110 @@ class Room(
         onClosed(this)
     }
 
-    /** Broadcast a shutdown notice and detach everyone. Called on graceful server SIGTERM. */
+    /**
+     * Called on graceful server SIGTERM. With durable persistence the room does nothing: its
+     * snapshot is already on disk, and a disband broadcast would make every client abandon the very
+     * session token it needs to reclaim its seat after the restart. Sockets die with the process
+     * and clients reconnect-and-resume. Without persistence, disband as before — the game is lost
+     * either way, and clients should be told rather than left retrying.
+     */
     fun shutdown() {
+        if (persistence.durable) return
         submit(RoomCommand.ForceDisband(DisbandReason.SERVER_SHUTDOWN))
     }
 
     /** Build the [ResumedState] for a client that reconnected into this room. */
     fun resumedState(): ResumedState = ResumedState(joinCode, phase)
+
+    // --- Persistence --------------------------------------------------------------------------------
+
+    /**
+     * Queue the current state for the snapshot writer. Runs after every handled command (cheap: the
+     * writer conflates per room). Skipped while PLAYING with no state yet — the previous LOBBY
+     * snapshot on disk stays valid until the driver's first StateProduced arrives — and after
+     * FINISHED/disband, whose handlers queued the file's deletion instead.
+     */
+    private fun persist() {
+        if (!persistence.durable || closed || phase == RoomPhase.FINISHED) return
+        val state = latestState
+        if (phase == RoomPhase.PLAYING && state == null) return
+        persistence.save(
+            RoomSnapshot(
+                gameId = gameId,
+                joinCode = joinCode,
+                creatorToken = creatorToken,
+                lobbyConfig = lobbyConfig,
+                phase = phase,
+                seats = slots.map { RoomSnapshot.SeatSnapshot(it.name, it.isBot, it.ownerToken) },
+                stateVersion = stateVersion,
+                gameState = state.takeIf { phase == RoomPhase.PLAYING },
+                savedAtMillis = nowMillis(),
+            ),
+        )
+    }
+
+    /**
+     * Rebuild this room from [snapshot]. Must run before [start] (no actor is consuming yet, so
+     * direct mutation is safe; anything launched here queues commands until the actor drains them).
+     *
+     * Every seat comes back occupant-less, reclaimable by its owner's session token — the ordinary
+     * reclaim path. A restored game holds its driver until the first owner reconnects (bot-covering
+     * the rest, like any live disconnect); a restored lobby reserves owned seats for the disconnect
+     * grace before freeing them. The idle sweep reaps the room if nobody returns at all.
+     */
+    internal fun restoreFrom(snapshot: RoomSnapshot) {
+        lobbyConfig = snapshot.lobbyConfig
+        phase = snapshot.phase
+        stateVersion = snapshot.stateVersion
+        for ((slot, seatSnapshot) in slots.zip(snapshot.seats)) {
+            slot.name = seatSnapshot.name
+            slot.isBot = seatSnapshot.isBot
+            slot.ownerToken = seatSnapshot.ownerToken
+            seatSnapshot.ownerToken?.let { sessionRegistry.bind(it, gameId, slot.seat) }
+        }
+        emptySince = nowMillis() // nobody is connected yet; the idle sweep reaps a room no one reclaims
+        val state = snapshot.gameState
+        if (snapshot.phase == RoomPhase.PLAYING && state != null) {
+            restoreGame(state)
+        } else if (snapshot.phase == RoomPhase.LOBBY) {
+            for (slot in slots) {
+                if (slot.ownerToken == null) continue
+                scope.launch {
+                    delay(config.lobbyDisconnectGraceMillis)
+                    submit(RoomCommand.ReleaseUnclaimedSeat(slot.seat))
+                }
+            }
+        }
+    }
+
+    private fun restoreGame(state: GameState) {
+        val gameRules = FiveHundredRules(
+            playerCount = lobbyConfig.playerCount,
+            teamCount = lobbyConfig.teamCount,
+            misereEnabled = lobbyConfig.misereEnabled,
+            noTrumpsEnabled = lobbyConfig.noTrumpsEnabled,
+        )
+        rules = gameRules
+        for (slot in slots) {
+            val host = SeatHost(
+                seat = slot.seat,
+                bot = bot,
+                // Seeded off the evolving per-deal seed: deterministic for this restore, though not
+                // the sequence the pre-restart process would have produced — bot RNG continuity is
+                // not part of the engine's determinism guarantee.
+                botRandom = Random(state.rngSeed + slot.seat.index + 1),
+                turnTimeout = turnTimeoutMillis.milliseconds,
+            )
+            host.permanentBot = slot.isBot
+            slot.host = host
+        }
+        metrics.gameStarted()
+        // Fan the restored views out through the normal bookkeeping (latestState/latestViews/
+        // stateVersion/currentActor) so a reconnecting client is served immediately — but hold the
+        // driver until someone actually reclaims a seat (see [awaitingRestoredDriver]).
+        onStateProduced(state)
+        awaitingRestoredDriver = true
+    }
 
     private fun pickBotNames(count: Int): List<String> =
         pickBotNames(BOT_NAMES, slots.mapNotNull { it.name }, count, Random(joinCode.hashCode().toLong()))

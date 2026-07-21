@@ -15,6 +15,7 @@ import io.github.rotundtapir.fivehundred.net.LobbyConfig
 import io.github.rotundtapir.fivehundred.net.Names
 import io.github.rotundtapir.fivehundred.net.PROTOCOL_VERSION
 import io.github.rotundtapir.fivehundred.net.PickSeat
+import io.github.rotundtapir.fivehundred.net.RoomPhase
 import io.github.rotundtapir.fivehundred.net.RequestRematch
 import io.github.rotundtapir.fivehundred.net.SendEmote
 import io.github.rotundtapir.fivehundred.net.ServerMessage
@@ -47,7 +48,9 @@ class GameServer(
     private val logger = LoggerFactory.getLogger("connect")
 
     val sessionRegistry = SessionRegistry(nowMillis = nowMillis)
-    val rooms = RoomRegistry(config, scope, sessionRegistry, metrics, abuseLog, nowMillis)
+    val persistence: RoomPersistence =
+        config.dataDir?.let { FileRoomPersistence(java.nio.file.Path.of(it), scope) } ?: RoomPersistence.None
+    val rooms = RoomRegistry(config, scope, sessionRegistry, metrics, abuseLog, persistence, nowMillis)
 
     private val connectionIds = AtomicLong()
     private val connectionsPerIp = ConcurrentHashMap<String, Int>()
@@ -55,6 +58,29 @@ class GameServer(
         SlidingWindowCounter(LOBBY_WINDOW_MILLIS, config.lobbiesPerIpPer10Min, nowMillis)
 
     fun nextConnectionId(): Long = connectionIds.incrementAndGet()
+
+    /**
+     * Restore every room snapshotted by the previous process. Call once at boot, BEFORE the
+     * listener starts, so a reconnecting client's session token already resolves to its restored
+     * room. Snapshots older than their own room's idle-disband window are dropped — that room
+     * would have been reaped had the server kept running.
+     */
+    fun restoreRooms() {
+        if (!persistence.durable) return
+        var restored = 0
+        for (snapshot in persistence.loadAll()) {
+            val idleMillis = config.idleDisbandMillisOverride ?: (snapshot.lobbyConfig.idleDisbandMinutes * 60_000L)
+            val expired = nowMillis() - snapshot.savedAtMillis >= idleMillis
+            val playable = snapshot.phase != RoomPhase.FINISHED &&
+                !(snapshot.phase == RoomPhase.PLAYING && snapshot.gameState == null)
+            if (expired || !playable) {
+                persistence.delete(snapshot.gameId)
+                continue
+            }
+            if (rooms.restore(snapshot) != null) restored++
+        }
+        if (restored > 0) logger.info("restored {} room(s) from snapshots", restored)
+    }
 
     /** Start background maintenance (currently: evicting stale session tokens). Call once at boot. */
     fun startMaintenance() {

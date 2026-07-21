@@ -42,6 +42,14 @@ sealed interface RoomCommand {
      */
     data class DisconnectGraceExpired(val connection: PlayerConnection) : RoomCommand
 
+    /**
+     * The reclaim grace for a seat restored from a snapshot ran out. Frees the seat for new joiners
+     * unless its owner reconnected in the meantime (the slot then has an occupant). Lobby-phase
+     * restores only — an in-game seat stays reclaimable for the whole game, exactly like a live
+     * disconnect.
+     */
+    data class ReleaseUnclaimedSeat(val seat: Seat) : RoomCommand
+
     /** Fired by the [GameDriver] after every applied action (and the initial state). */
     data class StateProduced(val state: GameState) : RoomCommand
 

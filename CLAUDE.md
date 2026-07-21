@@ -105,8 +105,11 @@ Most modules are Kotlin Multiplatform; `wasmJs` is the browser target throughout
 - `server/` — the authoritative online server, **JVM only** (Ktor CIO WebSocket app). Actor-per-`Room`
   running the same `GameDriver`, `SeatHost` (the server-side `Player`, mirrors `ChannelPlayer`),
   `SessionRegistry` (reconnect tokens), `RoomRegistry` (4-char join codes), anti-abuse (per-IP caps,
-  rate limits, origin check), `/health` + `/metrics`, graceful drain/shutdown. In-memory only — a
-  restart drops every game. Depends on `engine`/`ai`/`net`; no Compose, no Android. See also
+  rate limits, origin check), `/health` + `/metrics`, graceful drain/shutdown. Live state is
+  in-memory; with `DATA_DIR` set (the deployed default, volume `/data`) rooms are also snapshotted
+  to disk (`RoomPersistence`) and restored at boot, so a restart/deploy no longer drops games —
+  clients rejoin their seats via their session tokens. A restored game holds its `GameDriver` until
+  the first owner reconnects (otherwise bots would race it to completion). Depends on `engine`/`ai`/`net`; no Compose, no Android. See also
   `docs/multiplayer-architecture.md`, `docs/self-hosting.md`, `docs/server-runbook.md`.
 - `shared/` — the whole game UI (screens, `GameViewModel`, tutorial, and the online flow —
   `OnlineViewModel`/`OnlineGameSession` + `ui/online/`) as Compose Multiplatform common code,

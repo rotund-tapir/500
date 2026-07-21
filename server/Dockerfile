@@ -4,7 +4,9 @@
 # eclipse-temurin's JRE image ships busybox wget, which the compose healthcheck uses.
 FROM eclipse-temurin:21-jre-alpine
 
-RUN adduser -D -H -s /sbin/nologin app
+# /data holds room snapshots (DATA_DIR) so games survive restarts; created app-owned here so the
+# named volume docker creates from it is writable by the unprivileged user.
+RUN adduser -D -H -s /sbin/nologin app && mkdir /data && chown app /data
 WORKDIR /app
 COPY build/install/server/ /app/
 
