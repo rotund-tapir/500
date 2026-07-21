@@ -1,1 +1,1 @@
-New optional Advanced AI: turn it on in Settings for stronger bot opponents that think ahead (up to a few seconds per move). Off by default; local games only.
+New optional Advanced AI: turn it on in Settings for stronger bot opponents that think ahead (up to a few seconds per move). Off by default; local games only. The hand-result banner now names the declarer and bid, so the wording can't contradict the red/green tint.
