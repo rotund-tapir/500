@@ -1,0 +1,54 @@
+# Draft fdroiddata recipe for https://gitlab.com/fdroid/fdroiddata
+# (destination: metadata/io.github.rotundtapir.fivehundred.yml).
+# Tracked here until the inclusion MR is opened — see issue #18.
+#
+# Notes for the submission:
+# - Summary/Description are deliberately omitted: F-Droid reads the localized
+#   fastlane metadata (fastlane/metadata/android/en-US/) straight from this repo,
+#   including changelogs and screenshots.
+# - License: the repo is GPL-3.0-or-later with an additional GPLv3 §7 permission
+#   (LICENSE-EXCEPTION.md) allowing the *play* flavor to link Google Ads/Billing.
+#   The foss flavor F-Droid builds contains none of that code, so plain
+#   GPL-3.0-or-later is the accurate SPDX id here; mention the exception in the
+#   MR description if the reviewer asks.
+# - Anti-features: none expected. No ads/tracking in foss; online multiplayer is
+#   optional, off by default, and the server is GPL + self-hostable (docs/self-hosting.md),
+#   so NonFreeNet does not apply.
+# - The Gradle daemon toolchain is pinned to Java 21 via
+#   gradle/gradle-daemon-jvm.properties (vendor-agnostic); AGP fails on JDK 25+.
+#   The sudo: block below installs/selects JDK 21 on the buildserver — verify the
+#   exact package/paths against the current F-Droid buildserver image when running
+#   `fdroid build` locally.
+
+Categories:
+  - Games
+License: GPL-3.0-or-later
+AuthorName: rotund_tapir
+SourceCode: https://github.com/rotundtapir/500
+IssueTracker: https://github.com/rotundtapir/500/issues
+Changelog: https://github.com/rotundtapir/500/releases
+Liberapay: rotund-tapir
+
+RepoType: git
+Repo: https://github.com/rotundtapir/500.git
+
+Builds:
+  - versionName: 0.4.0
+    versionCode: 10
+    commit: v0.4.0
+    submodules: true
+    sudo:
+      - apt-get update || apt-get update
+      - apt-get install -y -t bookworm-backports openjdk-21-jdk-headless
+      - update-alternatives --auto java
+    gradle:
+      - foss
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]
+# versionCode/versionName live in gradle.properties (build.gradle.kts reads them
+# via providers.gradleProperty), so point checkupdates at that file explicitly:
+UpdateCheckData: gradle.properties|appVersionCode=(\d+)|gradle.properties|appVersionName=(.+)
+
+CurrentVersion: 0.4.0
+CurrentVersionCode: 10
