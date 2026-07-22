@@ -168,8 +168,7 @@ fun SettingsDialog(
                     )
                 }
                 Text(
-                    "Bots think for up to a few seconds per move. Stronger play, uses more " +
-                        "battery. Local games only.",
+                    "Bots think for up to a few seconds per move. Stronger play. Local games only.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
