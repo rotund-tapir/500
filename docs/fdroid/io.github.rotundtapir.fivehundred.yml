@@ -21,10 +21,11 @@
 #   `fdroid build` locally.
 # - Verified 2026-07-22 with fdroidserver 2.4.5 (`fdroid build -l`, sudo block
 #   skipped — host already on JDK 21): builds green, scanner clean (needs the
-#   prebuild + scandelete below), and the rebuild matched the v0.4.0 GitHub
+#   prebuild + scandelete below), and the rebuild matched the v0.4.1 GitHub
 #   release asset from Binaries: with the allowed signer — the full reproducible
-#   publishing flow (#22). signatures/ next to this file is `fdroid signatures`
-#   output for versionCode 10, destined for the same fdroiddata metadata dir.
+#   publishing flow (#22), now including the GIT_COMMIT --short=8 pin (c67db2b).
+#   signatures/ next to this file is `fdroid signatures` output for
+#   versionCode 11, destined for the same fdroiddata metadata dir.
 
 Categories:
   - Games
@@ -42,9 +43,9 @@ Repo: https://github.com/rotundtapir/500.git
 Binaries: https://github.com/rotundtapir/500/releases/download/v%v/app-foss-release.apk
 
 Builds:
-  - versionName: 0.4.0
-    versionCode: 10
-    commit: v0.4.0
+  - versionName: 0.4.1
+    versionCode: 11
+    commit: v0.4.1
     subdir: app
     submodules: true
     sudo:
@@ -58,8 +59,11 @@ Builds:
     prebuild: sed -i -e '/foojay-resolver/d' ../settings.gradle.kts
     # Proprietary ads/billing live in this play-flavor-only cardkit module; the foss
     # flavor never resolves it, so delete it to keep the source tree scanner-clean.
+    # docs/fdroid is this recipe's staging copy in-repo — its signatures/ dir holds
+    # binary APKSigningBlock files the scanner would otherwise flag.
     scandelete:
       - cardkit/cardkit-monetization-play
+      - docs/fdroid
 
 # The release signing key (v2 scheme only). Only APKs signed with this cert may be published.
 AllowedAPKSigningKeys: 86c486105ed5062b90815fec97311029ab5569735926c323c7896c8d64b78d65
@@ -70,5 +74,5 @@ UpdateCheckMode: Tags ^v[0-9]
 # via providers.gradleProperty), so point checkupdates at that file explicitly:
 UpdateCheckData: gradle.properties|appVersionCode=(\d+)|gradle.properties|appVersionName=(.+)
 
-CurrentVersion: 0.4.0
-CurrentVersionCode: 10
+CurrentVersion: 0.4.1
+CurrentVersionCode: 11
