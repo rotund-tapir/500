@@ -28,8 +28,12 @@
 #   prebuild + scandelete below), and the rebuild matched the v0.4.1 GitHub
 #   release asset from Binaries: with the allowed signer — the full reproducible
 #   publishing flow (#22), now including the GIT_COMMIT --short=8 pin (c67db2b).
-#   signatures/ next to this file is `fdroid signatures` output for
-#   versionCode 11, destined for the same fdroiddata metadata dir.
+#   The versionCode-11 `fdroid signatures` output lives only in the fdroiddata
+#   branch (metadata/io.github.rotundtapir.fivehundred/signatures/11/) — it can be
+#   regenerated from the public release APK at any time (`fdroid signatures <url>`),
+#   so the binary blobs are no longer committed here. The docs/fdroid scandelete is
+#   still REQUIRED while the built commit is v0.4.1 (that tag contains the blobs);
+#   build blocks for later tags can drop it.
 
 Categories:
   - Card Game
