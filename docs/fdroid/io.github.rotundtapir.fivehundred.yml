@@ -1,6 +1,10 @@
 # Draft fdroiddata recipe for https://gitlab.com/fdroid/fdroiddata
 # (destination: metadata/io.github.rotundtapir.fivehundred.yml).
 # Tracked here until the inclusion MR is opened — see issue #18.
+# NOTE: the fdroiddata copy must be COMMENT-FREE — their CI runs `fdroid rewritemeta`
+# (which strips comments) and fails if the checked-in file differs. Of ~6,300 recipes
+# in fdroiddata, none carry comments. This annotated copy stays the working reference;
+# regenerate the MR copy with `fdroid rewritemeta` after any edit here.
 #
 # Notes for the submission:
 # - Summary/Description are deliberately omitted: F-Droid reads the localized
