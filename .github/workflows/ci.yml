@@ -158,8 +158,6 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # create the GitHub release and upload the APK
     steps:
       - uses: actions/checkout@v4
         with:
@@ -187,10 +185,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :app:bundlePlayRelease :app:assembleFossRelease
 
-      - name: Publish GitHub release (FOSS APK)
-        uses: softprops/action-gh-release@v2
+      # Publishing happens in publish-release, behind the verify-reproducible gate below.
+      - name: Upload FOSS APK for verification and publishing
+        uses: actions/upload-artifact@v4
         with:
-          files: app/build/outputs/apk/foss/release/*.apk
+          name: foss-release-apk
+          path: app/build/outputs/apk/foss/release/app-foss-release.apk
+          if-no-files-found: error
 
       # The play AAB is for the Play Console, not for sideloading: expose it as a private
       # workflow artifact (Actions -> run -> Artifacts) rather than on the public release.
@@ -200,6 +201,66 @@ jobs:
           name: play-release-aab
           path: app/build/outputs/bundle/playRelease/*.aab
           if-no-files-found: error
+
+  # Reproducibility gate (#22): rebuild the FOSS APK on a fresh runner and require it to match
+  # the signed APK byte-for-byte before anything is published. The rebuild is deliberately
+  # different in shape from the release build — full clone (what F-Droid's buildserver does,
+  # vs the shallow release checkout; exercises the GIT_COMMIT --short=8 pin) and no Gradle
+  # build cache (restored cache entries would let the "independent" rebuild reuse the release
+  # job's outputs and mask nondeterminism). apksigcopier compare is the same check
+  # fdroidserver runs against Binaries: — so if this job is green, F-Droid can reproduce the
+  # published APK.
+  verify-reproducible:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      # No gradle/actions/setup-gradle here — see the job comment.
+
+      - name: Rebuild FOSS APK (unsigned, no build cache)
+        run: ./gradlew --no-build-cache :app:assembleFossRelease
+
+      - name: Download signed APK
+        uses: actions/download-artifact@v4
+        with:
+          name: foss-release-apk
+          path: signed
+
+      - name: Compare rebuild to signed APK (signature-aware)
+        run: |
+          pipx install apksigcopier
+          export PATH="$ANDROID_HOME/build-tools/36.0.0:$PATH"   # apksigcopier shells out to apksigner
+          sha256sum signed/app-foss-release.apk app/build/outputs/apk/foss/release/app-foss-release-unsigned.apk
+          apksigcopier compare signed/app-foss-release.apk \
+            --unsigned app/build/outputs/apk/foss/release/app-foss-release-unsigned.apk
+          echo "reproducible: rebuild matches the signed APK"
+
+  publish-release:
+    needs: verify-reproducible
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the GitHub release and upload the APK
+    steps:
+      - name: Download verified APK
+        uses: actions/download-artifact@v4
+        with:
+          name: foss-release-apk
+
+      - name: Publish GitHub release (FOSS APK)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app-foss-release.apk
 
   # Build the server image and push it to GHCR on a release tag. The jar is built with Gradle (cache
   # reuse) then copied into a thin image; multi-arch so self-hosters on ARM (Raspberry Pi) can pull.

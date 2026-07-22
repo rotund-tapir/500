@@ -242,9 +242,11 @@ Editing shared/infra behaviour means changing files under `cardkit/`, which is a
 
 - Release artifacts are signed when `KEYSTORE_FILE`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`
   are set (env vars or gradle properties); absent ⇒ unsigned, which is correct for local builds and
-  F-Droid. CI's tag-triggered release job (`v*` tags) exports them from repo secrets, builds
-  `bundlePlayRelease` + `assembleFossRelease`, and publishes the FOSS APK to a GitHub release (the
-  job needs `permissions: contents: write`). The same `v*` tags also trigger the `deploy-web` job,
+  F-Droid. CI's tag-triggered release job (`v*` tags) exports them from repo secrets and builds
+  `bundlePlayRelease` + `assembleFossRelease`; the FOSS APK is then only published to the GitHub
+  release after `verify-reproducible` passes — a fresh-runner rebuild (full clone, no build cache)
+  that must match the signed APK byte-for-byte via `apksigcopier compare`, the same check F-Droid
+  runs against `Binaries:` (the `publish-release` job needs `permissions: contents: write`). The same `v*` tags also trigger the `deploy-web` job,
   which publishes the wasm build to GitHub Pages (source is set to "GitHub Actions" in repo
   settings). `dependenciesInfo` is disabled — F-Droid rejects the
   Google-encrypted blob. Release stays un-minified until a release-QA pass justifies R8.
