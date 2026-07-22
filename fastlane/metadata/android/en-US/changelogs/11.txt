@@ -1,0 +1,1 @@
+Online games now survive server restarts: everyone rejoins their seat and play carries on where it left off. The end-of-hand banner is now green exactly when your side won the hand, even on hands where the score moved the other way.
