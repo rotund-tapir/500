@@ -49,4 +49,6 @@ I'm the app's author. The `foss` flavor built here exists specifically so the F-
 
 Summary, description, screenshots and changelogs are intentionally not in this MR — they're Fastlane metadata maintained in the app repo.
 
+**Fork CI**: pipelines on my fork fail immediately with no jobs (new GitLab account without identity verification; per the template guidance I haven't added payment details). The recipe was linted and built locally with fdroidserver 2.4.5 — including the reproducible-build comparison against the release APK — so please trigger CI on your side as needed.
+
 /label ~"New App"
