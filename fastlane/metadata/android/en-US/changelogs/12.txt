@@ -1,0 +1,1 @@
+Housekeeping release: build and packaging cleanups for the upcoming F-Droid listing. No gameplay changes.
