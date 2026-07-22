@@ -19,6 +19,12 @@
 #   The sudo: block below installs/selects JDK 21 on the buildserver — verify the
 #   exact package/paths against the current F-Droid buildserver image when running
 #   `fdroid build` locally.
+# - Verified 2026-07-22 with fdroidserver 2.4.5 (`fdroid build -l`, sudo block
+#   skipped — host already on JDK 21): builds green, scanner clean (needs the
+#   prebuild + scandelete below), and the rebuild matched the v0.4.0 GitHub
+#   release asset from Binaries: with the allowed signer — the full reproducible
+#   publishing flow (#22). signatures/ next to this file is `fdroid signatures`
+#   output for versionCode 10, destined for the same fdroiddata metadata dir.
 
 Categories:
   - Games
@@ -31,11 +37,15 @@ Liberapay: rotund-tapir
 
 RepoType: git
 Repo: https://github.com/rotundtapir/500.git
+# Reproducible builds (#22): F-Droid rebuilds from source, checks the result against this
+# release asset, and publishes the upstream-signed APK — same signature as GitHub releases.
+Binaries: https://github.com/rotundtapir/500/releases/download/v%v/app-foss-release.apk
 
 Builds:
   - versionName: 0.4.0
     versionCode: 10
     commit: v0.4.0
+    subdir: app
     submodules: true
     sudo:
       - apt-get update || apt-get update
@@ -43,6 +53,16 @@ Builds:
       - update-alternatives --auto java
     gradle:
       - foss
+    # The scanner flags the foojay toolchain resolver (downloads JDKs at build time);
+    # the buildserver's JDK 21 (sudo block above) satisfies the toolchain pin locally.
+    prebuild: sed -i -e '/foojay-resolver/d' ../settings.gradle.kts
+    # Proprietary ads/billing live in this play-flavor-only cardkit module; the foss
+    # flavor never resolves it, so delete it to keep the source tree scanner-clean.
+    scandelete:
+      - cardkit/cardkit-monetization-play
+
+# The release signing key (v2 scheme only). Only APKs signed with this cert may be published.
+AllowedAPKSigningKeys: 86c486105ed5062b90815fec97311029ab5569735926c323c7896c8d64b78d65
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9]
