@@ -16,6 +16,16 @@ module) that runs the same engine, with the wire protocol/client in `:net` and t
 friends. The official server runs on a VPS behind Caddy and is deployed by CI on `v*` tags; it's also
 self-hostable (see `docs/self-hosting.md`).
 
+## Third-party code is untrusted — sandbox it
+
+Never build or run code from repos we don't control directly on this machine (e.g. testing other
+projects' F-Droid inclusion MRs: `fdroid build` executes the target's arbitrary Gradle/build
+scripts). Treat it as untrusted: run such builds inside a container (the official
+`registry.gitlab.com/fdroid/fdroidserver:buildserver` image is both the safe and the
+review-faithful choice) or another sandbox with only a scratch volume mounted — no home dir, no
+credentials, no SSH agent. Static inspection of third-party recipes/source is fine; execution is
+what needs isolation.
+
 ## Toolchain (read first — non-obvious and will waste time otherwise)
 
 - **Gradle must run on JDK 21** (the machine default `java` is JDK 25, and the Android Gradle Plugin
